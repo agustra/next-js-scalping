@@ -179,6 +179,7 @@ export async function GET(request: Request) {
     }
     
     console.log('🔄 Fetching fresh data from IDX...');
+    debugSectorMapping(); // ✅ ADD THIS LINE
 
     const idxResponse = await fetch(`https://divine-moon-d133.agusta-usk.workers.dev/`);
 
@@ -193,14 +194,36 @@ export async function GET(request: Request) {
     }
 
     // 2. Filter dan proses saham aktif
+    // const activeStocks = idxData.data.filter((stock: IDXStockData) => {
+    //   return (
+    //     stock.Volume > 100000 && // Minimum volume 100k
+    //     stock.Close > 50 && // Minimum price Rp 50
+    //     stock.StockCode && // Valid stock code
+    //     stock.Close > 0 // Positive price
+    //   );
+    // });
+
     const activeStocks = idxData.data.filter((stock: IDXStockData) => {
       return (
-        stock.Volume > 100000 && // Minimum volume 100k
-        stock.Close > 50 && // Minimum price Rp 50
-        stock.StockCode && // Valid stock code
-        stock.Close > 0 // Positive price
+        stock.Volume > 1000000 &&    
+        stock.Close >= 50 &&          // ✅ MINIMAL Rp 50
+        stock.Close <= 100 &&         // ✅ MAKSIMAL Rp 100  
+        stock.StockCode && 
+        stock.Close > 0
       );
     });
+
+    // 2. Filter dan proses saham aktif dengan kriteria ketat
+    // const activeStocks = idxData.data.filter((stock: IDXStockData) => {
+    //   const isLiquid = stock.Volume > 1000000;          // 1 juta shares
+    //   const isReasonablePrice = stock.Close > 100;      // Rp 100+
+    //   const hasRealValue = stock.Value > 100000000;     // Rp 100 juta+
+    //   const isValid = stock.StockCode && stock.Close > 0;
+      
+    //   return isLiquid && isReasonablePrice && hasRealValue && isValid;
+    // });
+
+    console.log(`📊 ${activeStocks.length} quality stocks (from ${idxData.data.length} total)`);
 
     console.log(`📊 Processing ${activeStocks.length} active stocks from ${idxData.data.length} total stocks`);
 
@@ -928,57 +951,135 @@ function getMarketStatus(): { isOpen: boolean; nextOpen?: string; nextClose?: st
   }
 }
 
-// Sector mapping dan analysis functions (tetap sama)
+// ✅ PERFECT SECTOR MAPPING - NO DUPLICATES
 const sectorMapping: Record<string, string> = {
   // Banking & Financial
   'BBCA': 'Banking', 'BBRI': 'Banking', 'BMRI': 'Banking', 'BBNI': 'Banking',
   'BCA': 'Banking', 'BTPN': 'Banking', 'BNGA': 'Banking', 'BJBR': 'Banking',
-  'BANK': 'Banking', 'AGRO': 'Agriculture', 'AALI': 'Agriculture',
-  
-  // Telecom
-  'TLKM': 'Telecom', 'ISAT': 'Telecom', 'EXCL': 'Telecom', 'FREN': 'Telecom',
-  
-  // Automotive
-  'ASII': 'Automotive', 'AUTO': 'Automotive', 'IMAS': 'Automotive',
-  'GJTL': 'Automotive', 'LMPI': 'Automotive',
-  
-  // Consumer Goods
-  'UNVR': 'Consumer', 'INDF': 'Consumer', 'ICBP': 'Consumer', 'KLBF': 'Consumer',
-  'MYOR': 'Consumer', 'ULTJ': 'Consumer', 'STTP': 'Consumer',
-  
-  // Basic Materials
-  'SMGR': 'Cement', 'INTP': 'Cement', 'WTON': 'Cement', 'SMCB': 'Cement',
-  'TPIA': 'Cement', 'SIDO': 'Pharmacy', 'KAEF': 'Pharmacy',
-  
-  // Energy & Mining
-  'PGAS': 'Energy', 'ADRO': 'Mining', 'PTBA': 'Mining', 'ITMG': 'Mining',
-  'ANTM': 'Mining', 'MDKA': 'Mining', 'BRPT': 'Mining', 'BUMI': 'Mining',
-  
-  // Tobacco
-  'GGRM': 'Tobacco', 'HMSP': 'Tobacco',
-  
-  // Property & Real Estate
+  'BJTM': 'Banking', 'BKSW': 'Banking', 'BNLI': 'Banking', 'BDMN': 'Banking',
+  'BBKP': 'Banking', 'BANK': 'Banking',
+
+  // Property & Real Estate 
   'BSDE': 'Property', 'CTRA': 'Property', 'DMAS': 'Property', 'LPKR': 'Property',
-  'PWON': 'Property', 'SMRA': 'Property',
-  
-  // Infrastructure
-  'WIKA': 'Infrastructure', 'PTPP': 'Infrastructure', 'WSKT': 'Infrastructure',
-  'JSMR': 'Infrastructure', 'ADHI': 'Infrastructure',
-  
+  'PWON': 'Property', 'SMRA': 'Property', 'BKSL': 'Property', 'DUTI': 'Property',
+  'GPRA': 'Property', 'OMRE': 'Property', 'PBSA': 'Property', 'TARA': 'Property',
+  'BUVA': 'Property', 'LAND': 'Property', 'CARE': 'Property', 'SMDM': 'Property',
+
+  // Mining & Energy
+  'ADRO': 'Mining', 'PTBA': 'Mining', 'ITMG': 'Mining', 'ANTM': 'Mining',
+  'MDKA': 'Mining', 'BRMS': 'Mining', 'BUMI': 'Mining', 'BYAN': 'Mining',
+  'BRPT': 'Mining', 'DOID': 'Mining', 'TKIM': 'Mining', 'APEX': 'Mining',
+  'HRUM': 'Mining', 'INCO': 'Mining', 'PGAS': 'Energy', 'AKRA': 'Energy',
+  'ADMG': 'Energy', 'ENER': 'Energy',
+
   // Technology
   'GOTO': 'Technology', 'BBHI': 'Technology', 'DMMX': 'Technology',
-  'EDGE': 'Technology', 'MTDL': 'Technology'
+  'EDGE': 'Technology', 'MTDL': 'Technology', 'WIFI': 'Technology',
+  'RSCH': 'Technology', 'TCID': 'Technology', 'KING': 'Technology', 
+  'LINK': 'Technology', 'WIRG': 'Technology', 'DIVA': 'Technology',
+  'NFCX': 'Technology',
+
+  // Agriculture & Plantation
+  'AALI': 'Agriculture', 'LSIP': 'Agriculture', 'SIMP': 'Agriculture',
+  'AGRO': 'Agriculture', 'MINA': 'Agriculture', 'SGRO': 'Agriculture', 
+  'ALMI': 'Agriculture', 'CPRO': 'Agriculture', 'TBLA': 'Agriculture',
+  'SIPD': 'Agriculture',
+
+  // Consumer Goods
+  'UNVR': 'Consumer', 'INDF': 'Consumer', 'ICBP': 'Consumer', 'KLBF': 'Consumer',
+  'MYOR': 'Consumer', 'ULTJ': 'Consumer', 'STTP': 'Consumer', 'SKLT': 'Consumer',
+  'CLEO': 'Consumer', 'MRAT': 'Consumer', 'ADES': 'Consumer',
+
+  // Automotive & Manufacturing
+  'ASII': 'Automotive', 'AUTO': 'Automotive', 'IMAS': 'Automotive',
+  'BOLT': 'Automotive', 'JAYA': 'Automotive', 'MABA': 'Automotive',
+
+  // Infrastructure & Construction
+  'WIKA': 'Infrastructure', 'PTPP': 'Infrastructure', 'WSKT': 'Infrastructure',
+  'JSMR': 'Infrastructure', 'ADHI': 'Infrastructure', 'WEGE': 'Infrastructure',
+  'SSIA': 'Infrastructure', 'SOCI': 'Infrastructure',
+
+  // Healthcare & Pharmacy
+  'SIDO': 'Pharmacy', 'KAEF': 'Pharmacy', 'DVLA': 'Pharmacy', 'PEHA': 'Pharmacy',
+  'TSPC': 'Pharmacy', 'MERK': 'Pharmacy', 'PYFA': 'Pharmacy', 'SILO': 'Pharmacy',
+
+  // Transportation & Logistics
+  'GIAA': 'Transportation', 'LPPF': 'Transportation', 'MIRA': 'Transportation',
+  'TAXI': 'Transportation', 'BLTA': 'Transportation', 'BPTR': 'Transportation',
+
+  // Telecom
+  'TLKM': 'Telecom', 'ISAT': 'Telecom', 'EXCL': 'Telecom', 'FREN': 'Telecom',
+
+  // Tobacco
+  'GGRM': 'Tobacco', 'HMSP': 'Tobacco',
+
+  // Cement & Building Materials
+  'SMGR': 'Cement', 'INTP': 'Cement', 'SMCB': 'Cement', 'TPIA': 'Cement'
 };
 
+// ✅ ROBUST SECTOR DETECTION
 function getSector(symbol: string): string {
-  const baseSymbol = symbol.replace('.JK', '');
-  if (sectorMapping[baseSymbol]) return sectorMapping[baseSymbol];
-  if (baseSymbol.startsWith('B') && baseSymbol.length === 4) return 'Banking';
-  if (baseSymbol.startsWith('S') && baseSymbol.length === 4) return 'Cement';
-  if (baseSymbol.startsWith('T') && baseSymbol.length === 4) return 'Telecom';
-  if (baseSymbol.includes('AUTO') || baseSymbol.includes('MOTOR')) return 'Automotive';
-  if (baseSymbol.includes('MINING') || baseSymbol.includes('TAMBANG')) return 'Mining';
-  return 'Others';
+  // Handle case sensitivity and .JK suffix
+  const baseSymbol = symbol.replace('.JK', '').toUpperCase();
+  
+  console.log(`🔍 Mapping: ${symbol} -> base: ${baseSymbol}`); // DEBUG
+  
+  // 1. Direct mapping first
+  if (sectorMapping[baseSymbol]) {
+    return sectorMapping[baseSymbol];
+  }
+  
+  // 2. Enhanced pattern matching
+  const symbolUpper = baseSymbol.toUpperCase();
+  
+  if (symbolUpper.includes('BANK') || symbolUpper.includes('BPR') || 
+      symbolUpper.includes('FINAN')) {
+    return 'Banking';
+  }
+  
+  if (symbolUpper.includes('MINING') || symbolUpper.includes('TAMBANG') || 
+      symbolUpper.includes('COAL') || symbolUpper.includes('MINERAL') ||
+      symbolUpper.includes('RESOURCE')) {
+    return 'Mining';
+  }
+  
+  if (symbolUpper.includes('PROP') || symbolUpper.includes('REAL') || 
+      symbolUpper.includes('LAND') || symbolUpper.includes('ESTATE') ||
+      symbolUpper.includes('CITY')) {
+    return 'Property';
+  }
+  
+  if (symbolUpper.includes('TECH') || symbolUpper.includes('DIGITAL') || 
+      symbolUpper.includes('SOFT') || symbolUpper.includes('NET') ||
+      symbolUpper.includes('SYSTEM') || symbolUpper.includes('COMP')) {
+    return 'Technology';
+  }
+  
+  if (symbolUpper.includes('FARM') || symbolUpper.includes('AGRIC') || 
+      symbolUpper.includes('FOOD') || symbolUpper.includes('PLANT') ||
+      symbolUpper.includes('FISH') || symbolUpper.includes('FARMA')) {
+    return 'Agriculture';
+  }
+  
+  if (symbolUpper.includes('CONST') || symbolUpper.includes('BUILD') || 
+      symbolUpper.includes('INFRA') || symbolUpper.includes('CONSTR')) {
+    return 'Infrastructure';
+  }
+  
+  // 3. Check company name if available (future enhancement)
+    // Direct mapping only - no pattern matching
+  return sectorMapping[baseSymbol] || 'Others';
+}
+
+// ✅ DEBUG FUNCTION - tambahkan ini
+function debugSectorMapping() {
+  const testSymbols = ['BKSL', 'BRMS', 'WIFI', 'APEX', 'WIRG', 'MINA'];
+  
+  console.log('🔍 DEBUG SECTOR MAPPING:');
+  testSymbols.forEach(symbol => {
+    const sector = getSector(symbol);
+    console.log(`${symbol} -> ${sector}`);
+  });
 }
 
 function getSectorAnalysis(stocks: EnhancedStockResult[]) {
