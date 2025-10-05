@@ -76,6 +76,9 @@ export async function GET() {
     let totalIDX = 0;
     
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
       const idxResponse = await fetch(
         "https://www.idx.co.id/primary/TradingSummary/GetStockSummary",
         {
@@ -85,9 +88,11 @@ export async function GET() {
             Accept: "application/json, text/javascript, */*; q=0.01",
             "X-Requested-With": "XMLHttpRequest",
           },
-          timeout: 10000 // 10 second timeout
+          signal: controller.signal
         }
       );
+      
+      clearTimeout(timeoutId);
 
       if (idxResponse.ok) {
         const idxData = await idxResponse.json();
