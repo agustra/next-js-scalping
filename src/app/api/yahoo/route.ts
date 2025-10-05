@@ -127,7 +127,7 @@ export async function GET() {
 
     // 3. Get enhanced data with indicators
     const results: StockResult[] = [];
-    const batchSize = 5; // Reduce batch size to avoid rate limiting
+    const batchSize = 3; // Further reduce batch size to avoid rate limiting
     const period2 = new Date();
     const period1 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     
@@ -225,7 +225,7 @@ export async function GET() {
       
       // Add delay between batches to avoid rate limiting
       if (i + batchSize < symbols.length) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Increased delay
       }
     }
 
@@ -390,16 +390,16 @@ function validateSignal(signal: string, indicators: { volume?: number | null; bb
   return signal;
 }
 
-// Market Context Analysis
+// Market Context Analysis with retry and fallback
 async function getMarketCondition() {
   try {
-    // Get IHSG data for market context
-    const ihsgQuote = await yahooFinance.quote('^JKSE');
-    const ihsgHistorical = await yahooFinance.historical('^JKSE', {
+    // Use retry logic for Yahoo Finance calls
+    const ihsgQuote = await retryYahooCall(() => yahooFinance.quote('^JKSE'));
+    const ihsgHistorical = await retryYahooCall(() => yahooFinance.historical('^JKSE', {
       period1: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
       period2: new Date(),
       interval: '1d'
-    });
+    }));
     
     if (ihsgHistorical.length < 10) {
       return { trend: 'UNKNOWN', strength: 0, condition: 'Data insufficient' };
@@ -437,8 +437,17 @@ async function getMarketCondition() {
       ihsgChange: ihsgQuote.regularMarketChangePercent || 0
     };
   } catch (error) {
-    console.error('Market context error:', error);
-    return { trend: 'UNKNOWN', strength: 0, condition: 'Market data unavailable' };
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Market context error:', errorMsg);
+    
+    // Return fallback market context
+    return { 
+      trend: 'SIDEWAYS', 
+      strength: 0, 
+      condition: 'Market data temporarily unavailable',
+      ihsgPrice: 7000, // Approximate IHSG level
+      ihsgChange: 0
+    };
   }
 }
 
@@ -507,9 +516,14 @@ async function retryYahooCall<T>(fn: () => Promise<T>, maxRetries = 1): Promise<
         errorMsg.includes('timeout') ||
         errorMsg.includes('Edge: Too') || 
         errorMsg.includes('not valid JSON') ||
+        errorMsg.includes('Too Many Requests') ||
         errorMsg.includes('ECONNRESET') ||
         errorMsg.includes('ETIMEDOUT')
       )) {
+        // Add longer delay for rate limit errors
+        if (errorMsg.includes('Too Many Requests')) {
+          await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+        }
         continue;
       }
       
