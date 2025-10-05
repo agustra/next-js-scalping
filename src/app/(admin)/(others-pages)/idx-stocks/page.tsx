@@ -65,7 +65,13 @@ export default function IDXStocksPage() {
   const [priceFilter, setPriceFilter] = useState({ min: 50, max: 100, enabled: true });
   const [signalFilter, setSignalFilter] = useState<'ALL' | 'BUY' | 'SELL' | 'HOLD'>('ALL');
   const [sectorFilter, setSectorFilter] = useState<string>('ALL');
-  const [sectorAnalysis, setSectorAnalysis] = useState<Record<string, any>>({});
+  const [sectorAnalysis, setSectorAnalysis] = useState<Record<string, {
+    count: number;
+    avgSignalStrength: number;
+    buySignals: number;
+    sellSignals: number;
+    topPerformer: string;
+  }>>({});
   
   // Get unique sectors from stocks
   const availableSectors = ['ALL', ...Array.from(new Set(stocks.map(stock => getSector(stock.symbol))))];
@@ -255,9 +261,9 @@ export default function IDXStocksPage() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Object.entries(sectorAnalysis)
-              .sort(([,a], [,b]) => (b as any).count - (a as any).count)
+              .sort(([,a], [,b]) => b.count - a.count)
               .slice(0, 6)
-              .map(([sector, data]: [string, any]) => (
+              .map(([sector, data]) => (
                 <div 
                   key={sector} 
                   className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${

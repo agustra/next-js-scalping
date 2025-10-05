@@ -88,6 +88,8 @@ interface CachedData {
 const memoryCache = new Map<string, { data: CachedData; timestamp: number }>();
 
 export async function GET() {
+  const startTime = Date.now();
+  
   try {
     // Cache management
     const cacheKey = getCacheKey();
@@ -169,6 +171,7 @@ export async function GET() {
     const riskAnalysis = getRiskAnalysis(sortedStocks);
 
     // 7. Prepare enhanced response
+    const marketStatus = getMarketStatus();
     const responseData: ResponseData = {
       source: "IDX Complete Data + Advanced Technical Analysis + Sector Intelligence",
       timestamp: Date.now(),
@@ -182,29 +185,36 @@ export async function GET() {
       volumeProfile,
       momentumAnalysis,
       riskAnalysis,
+      marketStatus,
       stocks: sortedStocks,
       cached: false
     };
 
-    // 8. Add market status
-    const marketStatus = getMarketStatus();
-    responseData.marketStatus = marketStatus;
+    // 8. Add performance metrics
+    const processingTime = Date.now() - startTime;
+    responseData.performance = {
+      processingTime,
+      stocksPerSecond: Number((sortedStocks.length / (processingTime / 1000)).toFixed(2)),
+      memoryUsage: Number((process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2))
+    };
     
     // 9. Cache the result
     setCachedData(cacheKey, responseData);
-    console.log('💾 Data cached successfully');
+    console.log(`⚡ Processing completed in ${processingTime}ms`);
     console.log(`📈 Market Status: ${marketStatus.isOpen ? 'OPEN' : 'CLOSED'}`);
     console.log(`🎯 Processed ${sortedStocks.length} stocks with ${signalSummary.strongBuy + signalSummary.buy} buy signals`);
 
     return NextResponse.json(responseData);
 
   } catch (error) {
-    console.error("IDX API error:", error);
+    const processingTime = Date.now() - startTime;
+    console.error(`❌ API failed after ${processingTime}ms:`, error);
     return NextResponse.json(
       { 
         error: "Failed to process IDX data",
         message: error instanceof Error ? error.message : "Unknown error",
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        processingTime
       },
       { status: 500 }
     );
@@ -213,30 +223,35 @@ export async function GET() {
 
 async function processStocksWithIndicators(stocks: IDXStockData[]): Promise<EnhancedStockResult[]> {
   const results: EnhancedStockResult[] = [];
+  const errors: { symbol: string; error: string }[] = [];
   
-  // Process in batches to avoid overwhelming
   const batchSize = 20;
   
   for (let i = 0; i < stocks.length; i += batchSize) {
     const batch = stocks.slice(i, i + batchSize);
     
-    const batchResults = await Promise.all(
-      batch.map(async (stock) => {
-        try {
-          return await processSingleStock(stock);
-        } catch (error) {
-          console.error(`Failed to process ${stock.StockCode}:`, error);
-          return null;
-        }
-      })
-    );
+    const batchPromises = batch.map(async (stock) => {
+      try {
+        return await processSingleStock(stock);
+      } catch (error) {
+        errors.push({
+          symbol: stock.StockCode,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        return null;
+      }
+    });
     
+    const batchResults = await Promise.all(batchPromises);
     results.push(...batchResults.filter(Boolean) as EnhancedStockResult[]);
     
-    // Add delay between batches
     if (i + batchSize < stocks.length) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
+  }
+  
+  if (errors.length > 0) {
+    console.warn(`⚠️ ${errors.length} stocks failed to process:`, errors.slice(0, 5));
   }
   
   return results;
@@ -648,15 +663,26 @@ interface ResponseData {
   activeStocks: number;
   processedStocks: number;
   displayedStocks: number;
-  signalSummary: Record<string, number>;
-  marketSummary: Record<string, unknown>;
-  sectorAnalysis: Record<string, unknown>;
-  volumeProfile: Record<string, unknown>;
-  momentumAnalysis: Record<string, unknown>;
-  riskAnalysis: Record<string, unknown>;
+  signalSummary: {
+    buy: number;
+    sell: number;
+    hold: number;
+    strongBuy: number;
+    strongSell: number;
+  };
+  marketSummary: ReturnType<typeof getMarketSummary>;
+  sectorAnalysis: ReturnType<typeof getSectorAnalysis>;
+  volumeProfile: ReturnType<typeof getVolumeProfile>;
+  momentumAnalysis: ReturnType<typeof getMomentumAnalysis>;
+  riskAnalysis: ReturnType<typeof getRiskAnalysis>;
+  marketStatus: { isOpen: boolean; nextOpen?: string; nextClose?: string; message: string; currentTime: string };
   stocks: EnhancedStockResult[];
   cached: boolean;
-  marketStatus?: { isOpen: boolean; nextOpen?: string; nextClose?: string };
+  performance?: {
+    processingTime: number;
+    stocksPerSecond: number;
+    memoryUsage: number;
+  };
 }
 
 function setCachedData(cacheKey: string, data: ResponseData): void {
@@ -893,8 +919,7 @@ function getRiskAnalysis(stocks: EnhancedStockResult[]) {
 
 
 
-// Market status checker
-function getMarketStatus(): { isOpen: boolean; nextOpen?: string; nextClose?: string } {
+function getMarketStatus(): { isOpen: boolean; nextOpen?: string; nextClose?: string; message: string; currentTime: string } {
   const now = new Date();
   const jakartaTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Jakarta"}));
   const hour = jakartaTime.getHours();
@@ -904,5 +929,34 @@ function getMarketStatus(): { isOpen: boolean; nextOpen?: string; nextClose?: st
   const isTradingHours = hour >= 9 && hour < 16;
   const isOpen = isWeekday && isTradingHours;
   
-  return { isOpen };
+  let message = '';
+  const nextOpen = '';
+  let nextClose = '';
+  
+  if (isOpen) {
+    const closeTime = new Date(jakartaTime);
+    closeTime.setHours(16, 0, 0, 0);
+    const timeToClose = closeTime.getTime() - jakartaTime.getTime();
+    const hoursToClose = Math.floor(timeToClose / (1000 * 60 * 60));
+    const minutesToClose = Math.floor((timeToClose % (1000 * 60 * 60)) / (1000 * 60));
+    
+    message = `Market open - Closes in ${hoursToClose}h ${minutesToClose}m`;
+    nextClose = closeTime.toISOString();
+  } else {
+    if (!isWeekday) {
+      message = `Market closed - Weekend`;
+    } else if (hour < 9) {
+      message = `Market closed - Opens at 09:00`;
+    } else {
+      message = `Market closed - Opens tomorrow at 09:00`;
+    }
+  }
+  
+  return { 
+    isOpen, 
+    nextOpen, 
+    nextClose,
+    message,
+    currentTime: jakartaTime.toISOString()
+  };
 }
