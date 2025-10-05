@@ -615,11 +615,29 @@ function getCachedData(cacheKey: string): CachedData | null {
   }
 }
 
-function setCachedData(cacheKey: string, data: any): void {
+interface ResponseData {
+  source: string;
+  timestamp: number;
+  totalStocks: number;
+  activeStocks: number;
+  processedStocks: number;
+  displayedStocks: number;
+  signalSummary: Record<string, number>;
+  marketSummary: Record<string, unknown>;
+  sectorAnalysis: Record<string, unknown>;
+  volumeProfile: Record<string, unknown>;
+  momentumAnalysis: Record<string, unknown>;
+  riskAnalysis: Record<string, unknown>;
+  stocks: EnhancedStockResult[];
+  cached: boolean;
+}
+
+function setCachedData(cacheKey: string, data: ResponseData): void {
   memoryCache.set(cacheKey, {
     data: {
-      ...data,
-      source: "IDX Complete Data + Technical Analysis"
+      source: "IDX Complete Data + Technical Analysis",
+      timestamp: data.timestamp,
+      data: data.stocks
     },
     timestamp: Date.now()
   });
