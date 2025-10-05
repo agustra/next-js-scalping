@@ -1,173 +1,181 @@
-# TailAdmin Next.js - Free Next.js Tailwind Admin Dashboard Template
+# Next.js Scalping Dashboard 📈
 
-TailAdmin is a free and open-source admin dashboard template built on **Next.js and Tailwind CSS** providing developers with everything they need to create a feature-rich and data-driven: back-end, dashboard, or admin panel solution for any sort of web project.
+Indonesian Stock Scalping Dashboard with real-time IDX stock analysis, technical indicators, trading signals, and backtesting for day trading strategies.
 
-![TailAdmin - Next.js Dashboard Preview](./banner.png)
+![Next.js Scalping Dashboard](./banner.png)
 
-With TailAdmin Next.js, you get access to all the necessary dashboard UI components, elements, and pages required to build a high-quality and complete dashboard or admin panel. Whether you're building a dashboard or admin panel for a complex web application or a simple website. 
+## 🚀 Features
 
-TailAdmin utilizes the powerful features of **Next.js 15** and common features of Next.js such as server-side rendering (SSR), static site generation (SSG), and seamless API route integration. Combined with the advancements of **React 19** and the robustness of **TypeScript**, TailAdmin is the perfect solution to help get your project up and running quickly.
+### 📊 Real-time Stock Data
+- **IDX Integration**: Live data from Indonesia Stock Exchange
+- **Yahoo Finance API**: Real-time price updates
+- **Volume Analysis**: Track trading volume and market activity
+- **Market Context**: IHSG trend analysis
 
-## Overview
+### 📈 Technical Analysis
+- **RSI (Relative Strength Index)**: Optimized for day trading (9-period)
+- **Moving Averages**: SMA20, EMA12 for trend analysis
+- **MACD**: Fast signals for scalping (5/13/4 periods)
+- **Bollinger Bands**: Tight bands for scalping (10-period, 1.5 stdDev)
+- **Stochastic**: Fast stochastic for day trading (5/2 periods)
 
-TailAdmin provides essential UI components and layouts for building feature-rich, data-driven admin dashboards and control panels. It's built on:
+### 🎯 Trading Signals
+- **Smart Signal Generation**: Multi-indicator analysis
+- **Risk Management**: ATR, volatility, support/resistance
+- **Signal Validation**: Volume confirmation and false signal protection
+- **Signal Strength**: Scoring system (-5 to +5)
 
-- Next.js 15.x
-- React 19
-- TypeScript
-- Tailwind CSS V4
+### 🔄 Backtesting System
+- **Strategy Testing**: RSI, MA Crossover, Combined strategies
+- **Performance Metrics**: Total return, win rate, alpha, max drawdown
+- **Trade History**: Detailed transaction log
+- **Risk Analysis**: Comprehensive risk assessment
 
-### Quick Links
-- [✨ Visit Website](https://tailadmin.com)
-- [📄 Documentation](https://tailadmin.com/docs)
-- [⬇️ Download](https://tailadmin.com/download)
-- [🖌️ Figma Design File (Community Edition)](https://www.figma.com/community/file/1463141366275764364)
-- [⚡ Get PRO Version](https://tailadmin.com/pricing)
+### 🔐 Authentication
+- **Demo Accounts**: 
+  - Admin: `admin@demo.com` / `admin123`
+  - User: `user@demo.com` / `user123`
+- **Protected Routes**: Secure dashboard access
+- **Role-based Access**: Different permission levels
 
-### Demos
-- [Free Version](https://nextjs-free-demo.tailadmin.com)
-- [Pro Version](https://nextjs-demo.tailadmin.com)
+### 🎨 Modern UI/UX
+- **Responsive Design**: Mobile-first approach
+- **Dark Mode**: Toggle between light/dark themes
+- **Real-time Updates**: Auto-refresh every 30 seconds
+- **Interactive Charts**: ApexCharts integration
+- **Filtering & Sorting**: Advanced data manipulation
 
-### Other Versions
-- [HTML Version](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template)
-- [React Version](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard)
-- [Vue.js Version](https://github.com/TailAdmin/vue-tailwind-admin-dashboard)
+## 🛠️ Tech Stack
 
-## Installation
+- **Framework**: Next.js 15.2.3
+- **Frontend**: React 19, TypeScript
+- **Styling**: Tailwind CSS v4
+- **Charts**: ApexCharts, Recharts
+- **APIs**: Yahoo Finance 2, IDX API
+- **Technical Analysis**: technicalindicators library
+- **Authentication**: Custom auth context
+- **Deployment**: Vercel-ready
+
+## 🚀 Quick Start
 
 ### Prerequisites
-To get started with TailAdmin, ensure you have the following prerequisites installed and set up:
+- Node.js 18.x or later
+- npm or yarn
 
-- Node.js 18.x or later (recommended to use Node.js 20.x or later)
+### Installation
 
-### Cloning the Repository
-Clone the repository using the following command:
-
+1. **Clone the repository**
 ```bash
-git clone https://github.com/TailAdmin/free-nextjs-admin-dashboard.git
+git clone https://github.com/agustra/next-js-scalping.git
+cd next-js-scalping
 ```
 
-> Windows Users: place the repository near the root of your drive if you face issues while cloning.
+2. **Install dependencies**
+```bash
+npm install
+# or
+yarn install
+```
 
-1. Install dependencies:
-    ```bash
-    npm install
-    # or
-    yarn install
-    ```
-    > Use `--legacy-peer-deps` flag if you face peer-dependency error during installation.
+3. **Start development server**
+```bash
+npm run dev
+# or
+yarn dev
+```
 
-2. Start the development server:
-    ```bash
-    npm run dev
-    # or
-    yarn dev
-    ```
+4. **Open browser**
+Navigate to `http://localhost:3000`
 
-## Components
+### Build for Production
+```bash
+npm run build
+npm start
+```
 
-TailAdmin is a pre-designed starting point for building a web-based dashboard using Next.js and Tailwind CSS. The template includes:
+## 📱 Usage
 
-- Sophisticated and accessible sidebar
-- Data visualization components
-- Profile management and custom 404 page
-- Tables and Charts(Line and Bar)
-- Authentication forms and input elements
-- Alerts, Dropdowns, Modals, Buttons and more
-- Can't forget Dark Mode 🕶️
+### Login
+Use demo credentials:
+- **Admin**: `admin@demo.com` / `admin123`
+- **User**: `user@demo.com` / `user123`
 
-All components are built with React and styled using Tailwind CSS for easy customization.
+### Dashboard Features
+1. **Stock Analysis**: View real-time IDX stock data with technical indicators
+2. **Signal Filtering**: Filter by BUY/SELL/HOLD signals
+3. **Price Range**: Set custom price filters
+4. **Backtesting**: Test trading strategies with historical data
+5. **Risk Management**: Analyze volatility and risk metrics
 
-## Feature Comparison
+## 🔧 Configuration
 
-### Free Version
-- 1 Unique Dashboard
-- 30+ dashboard components
-- 50+ UI elements
-- Basic Figma design files
-- Community support
+### API Endpoints
+- `/api/yahoo` - Real-time stock data with technical analysis
+- `/api/backtest` - Strategy backtesting
+- `/api/historical` - Historical price data
 
-### Pro Version
-- 5 Unique Dashboards: Analytics, Ecommerce, Marketing, CRM, Stocks (more coming soon)
-- 400+ dashboard components and UI elements
-- Complete Figma design file
-- Email support
+### Caching
+- **Memory Cache**: 1-minute cache for day trading
+- **Auto-cleanup**: Removes expired cache entries
+- **Rate Limiting**: Batch processing to avoid API limits
 
-To learn more about pro version features and pricing, visit our [pricing page](https://tailadmin.com/pricing).
+## 📊 Trading Strategies
 
-## Changelog
+### RSI Strategy
+- **Buy**: RSI < 30 (oversold)
+- **Sell**: RSI > 70 (overbought)
+- **Optimized**: 9-period RSI for faster signals
 
-### Version 2.0.2 - [March 25, 2025]
+### MA Crossover
+- **Golden Cross**: SMA20 > SMA50 (bullish)
+- **Death Cross**: SMA20 < SMA50 (bearish)
 
-- Upgraded to Next v15.2.3 for [CVE-2025-29927](https://nextjs.org/blog/cve-2025-29927) concerns
-- Included overrides vectormap for packages to prevent peer dependency errors during installation.
-- Migrated from react-flatpickr to flatpickr package for React 19 support
+### Combined Strategy
+- **Multi-indicator**: RSI + MA + Volume confirmation
+- **Risk-adjusted**: Volatility and support/resistance levels
 
-### Version 2.0.1 - [February 27, 2025]
+## 🚀 Deployment
 
-#### Update Overview
+### Vercel (Recommended)
+1. Push to GitHub
+2. Connect to Vercel
+3. Deploy automatically
 
-- Upgraded to Tailwind CSS v4 for better performance and efficiency.
-- Updated class usage to match the latest syntax and features.
-- Replaced deprecated class and optimized styles.
+### Manual Deployment
+```bash
+npm run build
+npm start
+```
 
-#### Next Steps
+## 🤝 Contributing
 
-- Run npm install or yarn install to update dependencies.
-- Check for any style changes or compatibility issues.
-- Refer to the Tailwind CSS v4 [Migration Guide](https://tailwindcss.com/docs/upgrade-guide) on this release. if needed.
-- This update keeps the project up to date with the latest Tailwind improvements. 🚀
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
-### v2.0.0 (February 2025)
-A major update focused on Next.js 15 implementation and comprehensive redesign.
+## 📄 License
 
-#### Major Improvements
-- Complete redesign using Next.js 15 App Router and React Server Components
-- Enhanced user interface with Next.js-optimized components
-- Improved responsiveness and accessibility
-- New features including collapsible sidebar, chat screens, and calendar
-- Redesigned authentication using Next.js App Router and server actions
-- Updated data visualization using ApexCharts for React
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-#### Breaking Changes
+## ⚠️ Disclaimer
 
-- Migrated from Next.js 14 to Next.js 15
-- Chart components now use ApexCharts for React
-- Authentication flow updated to use Server Actions and middleware
+This application is for educational and research purposes only. It is not financial advice. Always do your own research and consult with financial professionals before making investment decisions.
 
-[Read more](https://tailadmin.com/docs/update-logs/nextjs) on this release.
+## 🙏 Acknowledgments
 
-#### Breaking Changes
-- Migrated from Next.js 14 to Next.js 15
-- Chart components now use ApexCharts for React
-- Authentication flow updated to use Server Actions and middleware
+- [TailAdmin](https://tailadmin.com) - Base dashboard template
+- [Yahoo Finance API](https://github.com/gadicc/node-yahoo-finance2) - Stock data provider
+- [Technical Indicators](https://github.com/anandanand84/technicalindicators) - TA calculations
+- [IDX](https://www.idx.co.id) - Indonesia Stock Exchange data
 
-### v1.3.4 (July 01, 2024)
-- Fixed JSvectormap rendering issues
+## 📞 Support
 
-### v1.3.3 (June 20, 2024)
-- Fixed build error related to Loader component
+If you find this project helpful, please give it a ⭐ on GitHub!
 
-### v1.3.2 (June 19, 2024)
-- Added ClickOutside component for dropdown menus
-- Refactored sidebar components
-- Updated Jsvectormap package
+For questions or support, please open an issue on GitHub.
 
-### v1.3.1 (Feb 12, 2024)
-- Fixed layout naming consistency
-- Updated styles
+---
 
-### v1.3.0 (Feb 05, 2024)
-- Upgraded to Next.js 14
-- Added Flatpickr integration
-- Improved form elements
-- Enhanced multiselect functionality
-- Added default layout component
-
-## License
-
-TailAdmin Next.js Free Version is released under the MIT License.
-
-## Support
-
-If you find this project helpful, please consider giving it a star on GitHub. Your support helps us continue developing and maintaining this template.
+**Happy Trading! 📈💰**
