@@ -475,7 +475,7 @@ async function getMarketCondition() {
       };
     }
     
-    const closes = ihsgHistorical.map((h: any) => h.close);
+    const closes = ihsgHistorical.map((h: { close: number }) => h.close);
     const sma10 = SMA.calculate({ values: closes, period: 10 });
     
     if (!sma10 || sma10.length === 0) {

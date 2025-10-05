@@ -26,6 +26,26 @@ interface IDXStock {
   };
 }
 
+// Sector mapping untuk filter
+const sectorMapping: Record<string, string> = {
+  'BBCA': 'Banking', 'BBRI': 'Banking', 'BMRI': 'Banking', 'BBNI': 'Banking',
+  'TLKM': 'Telecom', 'ISAT': 'Telecom', 'EXCL': 'Telecom',
+  'ASII': 'Automotive', 'AUTO': 'Automotive',
+  'UNVR': 'Consumer', 'INDF': 'Consumer', 'ICBP': 'Consumer', 'KLBF': 'Consumer',
+  'SMGR': 'Cement', 'INTP': 'Cement', 'WTON': 'Cement',
+  'PGAS': 'Energy', 'ADRO': 'Mining', 'PTBA': 'Mining', 'ITMG': 'Mining',
+  'GGRM': 'Tobacco', 'HMSP': 'Tobacco',
+  'BSDE': 'Property', 'CTRA': 'Property', 'LPKR': 'Property'
+};
+
+function getSector(symbol: string): string {
+  const baseSymbol = symbol.replace('.JK', '');
+  if (sectorMapping[baseSymbol]) return sectorMapping[baseSymbol];
+  if (baseSymbol.startsWith('B') && baseSymbol.length === 4) return 'Banking';
+  if (baseSymbol.startsWith('T') && baseSymbol.length === 4) return 'Telecom';
+  return 'Others';
+}
+
 export default function IDXStocksPage() {
   const [stocks, setStocks] = useState<IDXStock[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +64,11 @@ export default function IDXStocksPage() {
   });
   const [priceFilter, setPriceFilter] = useState({ min: 50, max: 100, enabled: true });
   const [signalFilter, setSignalFilter] = useState<'ALL' | 'BUY' | 'SELL' | 'HOLD'>('ALL');
+  const [sectorFilter, setSectorFilter] = useState<string>('ALL');
+  const [sectorAnalysis, setSectorAnalysis] = useState<Record<string, any>>({});
+  
+  // Get unique sectors from stocks
+  const availableSectors = ['ALL', ...Array.from(new Set(stocks.map(stock => getSector(stock.symbol))))];
   
   const filteredStocks = stocks.filter(stock => {
     // Price filter
@@ -56,6 +81,12 @@ export default function IDXStocksPage() {
       const stockSignal = stock.signal.includes('BUY') ? 'BUY' : 
                          stock.signal.includes('SELL') ? 'SELL' : 'HOLD';
       if (stockSignal !== signalFilter) return false;
+    }
+    
+    // Sector filter
+    if (sectorFilter !== 'ALL') {
+      const stockSector = getSector(stock.symbol);
+      if (stockSector !== sectorFilter) return false;
     }
     
     return true;
@@ -76,6 +107,7 @@ export default function IDXStocksPage() {
         setSignalSummary(data.signalSummary || {
           buy: 0, sell: 0, hold: 0, strongBuy: 0, strongSell: 0
         });
+        setSectorAnalysis(data.sectorAnalysis || {});
       } catch (error) {
         console.error("Failed to fetch IDX data:", error);
       } finally {
@@ -215,9 +247,68 @@ export default function IDXStocksPage() {
         </div>
       </div>
 
+      {/* Sector Analysis */}
+      {Object.keys(sectorAnalysis).length > 0 && (
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Sector Analysis
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.entries(sectorAnalysis)
+              .sort(([,a], [,b]) => (b as any).count - (a as any).count)
+              .slice(0, 6)
+              .map(([sector, data]: [string, any]) => (
+                <div 
+                  key={sector} 
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                    sectorFilter === sector 
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                  }`}
+                  onClick={() => setSectorFilter(sectorFilter === sector ? 'ALL' : sector)}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-medium text-gray-900 dark:text-white">{sector}</h4>
+                    <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                      {data.count} stocks
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Avg Signal:</span>
+                      <span className={`font-medium ${
+                        data.avgSignalStrength > 1 ? 'text-green-600' :
+                        data.avgSignalStrength < -1 ? 'text-red-600' : 'text-gray-600'
+                      }`}>
+                        {data.avgSignalStrength?.toFixed(1) || '0.0'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">BUY/SELL:</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {data.buySignals || 0}/{data.sellSignals || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Top:</span>
+                      <span className="font-medium text-blue-600 text-xs">
+                        {data.topPerformer || '-'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+          <div className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+            💡 Click on a sector card to filter stocks by that sector
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-4 mb-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Signal Filter */}
           <div className="flex flex-wrap gap-4 items-center">
             <div>
@@ -233,6 +324,29 @@ export default function IDXStocksPage() {
                 <option value="BUY">BUY Only</option>
                 <option value="SELL">SELL Only</option>
                 <option value="HOLD">HOLD Only</option>
+              </select>
+            </div>
+          </div>
+          
+          {/* Sector Filter */}
+          <div className="flex flex-wrap gap-4 items-center">
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
+                Sector:
+              </label>
+              <select 
+                value={sectorFilter} 
+                onChange={(e) => setSectorFilter(e.target.value)}
+                className="border border-gray-300 rounded px-3 py-1 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              >
+                {availableSectors.map(sector => (
+                  <option key={sector} value={sector}>
+                    {sector === 'ALL' ? 'All Sectors' : sector}
+                    {sector !== 'ALL' && sectorAnalysis[sector] && (
+                      ` (${sectorAnalysis[sector].count || 0})`
+                    )}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -280,9 +394,19 @@ export default function IDXStocksPage() {
         
         <div className="mt-3 text-sm text-gray-500">
           Showing {filteredStocks.length} of {stocks.length} stocks
+          {sectorFilter !== 'ALL' && (
+            <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+              Sector: {sectorFilter}
+            </span>
+          )}
+          {signalFilter !== 'ALL' && (
+            <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+              Signal: {signalFilter}
+            </span>
+          )}
           {priceFilter.enabled && (
-            <span className="ml-2">
-              (Price: Rp {priceFilter.min.toLocaleString()} - Rp {priceFilter.max.toLocaleString()})
+            <span className="ml-2 px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs">
+              Price: Rp {priceFilter.min.toLocaleString()} - Rp {priceFilter.max.toLocaleString()}
             </span>
           )}
         </div>
@@ -296,6 +420,7 @@ export default function IDXStocksPage() {
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">No</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Symbol</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Name</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Sector</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Price</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Change</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">RSI</th>
@@ -314,6 +439,11 @@ export default function IDXStocksPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     {stock.name}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                      {getSector(stock.symbol)}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
                     {stock.price.toLocaleString()}

@@ -82,6 +82,8 @@ interface CachedData {
   data: EnhancedStockResult[];
 }
 
+
+
 // Memory cache
 const memoryCache = new Map<string, { data: CachedData; timestamp: number }>();
 
@@ -167,7 +169,7 @@ export async function GET() {
     const riskAnalysis = getRiskAnalysis(sortedStocks);
 
     // 7. Prepare enhanced response
-    const responseData = {
+    const responseData: ResponseData = {
       source: "IDX Complete Data + Advanced Technical Analysis + Sector Intelligence",
       timestamp: Date.now(),
       totalStocks: idxData.data.length,
@@ -184,9 +186,15 @@ export async function GET() {
       cached: false
     };
 
-    // 6. Cache the result
+    // 8. Add market status
+    const marketStatus = getMarketStatus();
+    responseData.marketStatus = marketStatus;
+    
+    // 9. Cache the result
     setCachedData(cacheKey, responseData);
     console.log('💾 Data cached successfully');
+    console.log(`📈 Market Status: ${marketStatus.isOpen ? 'OPEN' : 'CLOSED'}`);
+    console.log(`🎯 Processed ${sortedStocks.length} stocks with ${signalSummary.strongBuy + signalSummary.buy} buy signals`);
 
     return NextResponse.json(responseData);
 
@@ -592,11 +600,29 @@ function getMarketSummary(stocks: IDXStockData[]) {
   };
 }
 
-// Cache utility functions
+// Enhanced caching dengan different TTL berdasarkan market hours
 function getCacheKey(): string {
   const now = new Date();
-  const roundedTime = new Date(Math.floor(now.getTime() / (1 * 60 * 1000)) * (1 * 60 * 1000));
+  const marketHours = getMarketHours(now);
+  
+  // Different cache duration based on market hours
+  const cacheDuration = marketHours.isTradingHours ? 1 : 5; // minutes
+  
+  const roundedTime = new Date(
+    Math.floor(now.getTime() / (cacheDuration * 60 * 1000)) * (cacheDuration * 60 * 1000)
+  );
+  
   return `idx-stocks-${roundedTime.getTime()}`;
+}
+
+function getMarketHours(now: Date) {
+  const hour = now.getHours();
+  const day = now.getDay();
+  
+  const isWeekday = day >= 1 && day <= 5; // Monday to Friday
+  const isTradingHours = hour >= 9 && hour < 16; // 9 AM to 4 PM
+  
+  return { isWeekday, isTradingHours };
 }
 
 function getCachedData(cacheKey: string): CachedData | null {
@@ -630,6 +656,7 @@ interface ResponseData {
   riskAnalysis: Record<string, unknown>;
   stocks: EnhancedStockResult[];
   cached: boolean;
+  marketStatus?: { isOpen: boolean; nextOpen?: string; nextClose?: string };
 }
 
 function setCachedData(cacheKey: string, data: ResponseData): void {
@@ -656,20 +683,65 @@ function cleanOldCache(): void {
   }
 }
 
-// Sector mapping for IDX stocks
+// Expanded sector mapping untuk coverage lebih luas
 const sectorMapping: Record<string, string> = {
+  // Banking & Financial
   'BBCA': 'Banking', 'BBRI': 'Banking', 'BMRI': 'Banking', 'BBNI': 'Banking',
-  'TLKM': 'Telecom', 'ISAT': 'Telecom', 'EXCL': 'Telecom',
+  'BCA': 'Banking', 'BTPN': 'Banking', 'BNGA': 'Banking', 'BJBR': 'Banking',
+  'BANK': 'Banking', 'AGRO': 'Agriculture', 'AALI': 'Agriculture',
+  
+  // Telecom
+  'TLKM': 'Telecom', 'ISAT': 'Telecom', 'EXCL': 'Telecom', 'FREN': 'Telecom',
+  
+  // Automotive
   'ASII': 'Automotive', 'AUTO': 'Automotive', 'IMAS': 'Automotive',
+  'GJTL': 'Automotive', 'LMPI': 'Automotive',
+  
+  // Consumer Goods
   'UNVR': 'Consumer', 'INDF': 'Consumer', 'ICBP': 'Consumer', 'KLBF': 'Consumer',
-  'SMGR': 'Cement', 'INTP': 'Cement', 'WTON': 'Cement',
+  'MYOR': 'Consumer', 'ULTJ': 'Consumer', 'STTP': 'Consumer',
+  
+  // Basic Materials
+  'SMGR': 'Cement', 'INTP': 'Cement', 'WTON': 'Cement', 'SMCB': 'Cement',
+  'TPIA': 'Cement', 'SIDO': 'Pharmacy', 'KAEF': 'Pharmacy',
+  
+  // Energy & Mining
   'PGAS': 'Energy', 'ADRO': 'Mining', 'PTBA': 'Mining', 'ITMG': 'Mining',
-  'GGRM': 'Tobacco', 'HMSP': 'Tobacco'
+  'ANTM': 'Mining', 'MDKA': 'Mining', 'BRPT': 'Mining', 'BUMI': 'Mining',
+  
+  // Tobacco
+  'GGRM': 'Tobacco', 'HMSP': 'Tobacco',
+  
+  // Property & Real Estate
+  'BSDE': 'Property', 'CTRA': 'Property', 'DMAS': 'Property', 'LPKR': 'Property',
+  'PWON': 'Property', 'SMRA': 'Property',
+  
+  // Infrastructure
+  'WIKA': 'Infrastructure', 'PTPP': 'Infrastructure', 'WSKT': 'Infrastructure',
+  'JSMR': 'Infrastructure', 'ADHI': 'Infrastructure',
+  
+  // Technology
+  'GOTO': 'Technology', 'BBHI': 'Technology', 'DMMX': 'Technology',
+  'EDGE': 'Technology', 'MTDL': 'Technology'
 };
 
+// Enhanced sector detection dengan pattern matching
 function getSector(symbol: string): string {
   const baseSymbol = symbol.replace('.JK', '');
-  return sectorMapping[baseSymbol] || 'Others';
+  
+  // Direct mapping
+  if (sectorMapping[baseSymbol]) {
+    return sectorMapping[baseSymbol];
+  }
+  
+  // Pattern-based mapping
+  if (baseSymbol.startsWith('B') && baseSymbol.length === 4) return 'Banking';
+  if (baseSymbol.startsWith('S') && baseSymbol.length === 4) return 'Cement';
+  if (baseSymbol.startsWith('T') && baseSymbol.length === 4) return 'Telecom';
+  if (baseSymbol.includes('AUTO') || baseSymbol.includes('MOTOR')) return 'Automotive';
+  if (baseSymbol.includes('MINING') || baseSymbol.includes('TAMBANG')) return 'Mining';
+  
+  return 'Others';
 }
 
 function getSectorAnalysis(stocks: EnhancedStockResult[]) {
@@ -817,4 +889,20 @@ function getRiskAnalysis(stocks: EnhancedStockResult[]) {
     bestRiskReward,
     marketRisk: avgVolatility > 0.04 ? 'HIGH' : avgVolatility > 0.02 ? 'MEDIUM' : 'LOW'
   };
+}
+
+
+
+// Market status checker
+function getMarketStatus(): { isOpen: boolean; nextOpen?: string; nextClose?: string } {
+  const now = new Date();
+  const jakartaTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Jakarta"}));
+  const hour = jakartaTime.getHours();
+  const day = jakartaTime.getDay();
+  
+  const isWeekday = day >= 1 && day <= 5;
+  const isTradingHours = hour >= 9 && hour < 16;
+  const isOpen = isWeekday && isTradingHours;
+  
+  return { isOpen };
 }
