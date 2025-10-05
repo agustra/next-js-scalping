@@ -141,6 +141,8 @@ export default function StocksPage() {
               .sort((a, b) => (b.regularMarketVolume || 0) - (a.regularMarketVolume || 0))
               .slice(0, 5)
               .map((stock) => (
+                console.log(stock),
+                
                 <div key={stock.symbol} className="flex justify-between items-center">
                   <span className="text-sm font-medium text-gray-900 dark:text-white">
                     {stock.symbol.replace('.JK', '')}

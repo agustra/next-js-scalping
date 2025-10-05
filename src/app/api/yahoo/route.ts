@@ -391,22 +391,97 @@ function validateSignal(signal: string, indicators: { volume?: number | null; bb
 }
 
 // Market Context Analysis with retry and fallback
+// async function getMarketCondition() {
+//   try {
+//     // Use retry logic for Yahoo Finance calls
+//     const ihsgQuote = await retryYahooCall(() => yahooFinance.quote('^JKSE'));
+//     const ihsgHistorical = await retryYahooCall(() => yahooFinance.historical('^JKSE', {
+//       period1: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+//       period2: new Date(),
+//       interval: '1d'
+//     }));
+    
+//     if (ihsgHistorical.length < 10) {
+//       return { trend: 'UNKNOWN', strength: 0, condition: 'Data insufficient' };
+//     }
+    
+//     const closes = ihsgHistorical.map(h => h.close);
+//     const sma10 = SMA.calculate({ values: closes, period: 10 });
+//     const currentSMA = sma10[sma10.length - 1];
+//     const currentPrice = ihsgQuote.regularMarketPrice || closes[closes.length - 1];
+    
+//     // Determine market trend
+//     const trendStrength = ((currentPrice - currentSMA) / currentSMA) * 100;
+//     let trend = 'SIDEWAYS';
+//     let condition = 'Neutral Market';
+    
+//     if (trendStrength > 2) {
+//       trend = 'BULLISH';
+//       condition = 'Strong Bull Market';
+//     } else if (trendStrength > 0.5) {
+//       trend = 'MILD_BULLISH';
+//       condition = 'Mild Bull Market';
+//     } else if (trendStrength < -2) {
+//       trend = 'BEARISH';
+//       condition = 'Strong Bear Market';
+//     } else if (trendStrength < -0.5) {
+//       trend = 'MILD_BEARISH';
+//       condition = 'Mild Bear Market';
+//     }
+    
+//     return {
+//       trend,
+//       strength: Number(trendStrength.toFixed(2)),
+//       condition,
+//       ihsgPrice: currentPrice,
+//       ihsgChange: ihsgQuote.regularMarketChangePercent || 0
+//     };
+//   } catch (error) {
+//     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+//     console.error('Market context error:', errorMsg);
+    
+//     // Return fallback market context
+//     return { 
+//       trend: 'SIDEWAYS', 
+//       strength: 0, 
+//       condition: 'Market data temporarily unavailable',
+//       ihsgPrice: 7000, // Approximate IHSG level
+//       ihsgChange: 0
+//     };
+//   }
+// }
+
+// Market Context Analysis dengan error handling yang improved
 async function getMarketCondition() {
   try {
     // Use retry logic for Yahoo Finance calls
     const ihsgQuote = await retryYahooCall(() => yahooFinance.quote('^JKSE'));
+    
+    // Jika quote gagal, langsung return fallback
+    if (!ihsgQuote || !ihsgQuote.regularMarketPrice) {
+      return getFallbackMarketContext();
+    }
+    
     const ihsgHistorical = await retryYahooCall(() => yahooFinance.historical('^JKSE', {
       period1: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
       period2: new Date(),
       interval: '1d'
     }));
     
-    if (ihsgHistorical.length < 10) {
-      return { trend: 'UNKNOWN', strength: 0, condition: 'Data insufficient' };
+    if (!ihsgHistorical || ihsgHistorical.length < 10) {
+      return {
+        ...getFallbackMarketContext(),
+        condition: 'Historical data insufficient'
+      };
     }
     
-    const closes = ihsgHistorical.map(h => h.close);
+    const closes = ihsgHistorical.map((h: any) => h.close);
     const sma10 = SMA.calculate({ values: closes, period: 10 });
+    
+    if (!sma10 || sma10.length === 0) {
+      return getFallbackMarketContext();
+    }
+    
     const currentSMA = sma10[sma10.length - 1];
     const currentPrice = ihsgQuote.regularMarketPrice || closes[closes.length - 1];
     
@@ -434,21 +509,28 @@ async function getMarketCondition() {
       strength: Number(trendStrength.toFixed(2)),
       condition,
       ihsgPrice: currentPrice,
-      ihsgChange: ihsgQuote.regularMarketChangePercent || 0
+      ihsgChange: ihsgQuote.regularMarketChangePercent || 0,
+      dataQuality: 'REAL_TIME'
     };
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Market context error:', errorMsg);
     
-    // Return fallback market context
-    return { 
-      trend: 'SIDEWAYS', 
-      strength: 0, 
-      condition: 'Market data temporarily unavailable',
-      ihsgPrice: 7000, // Approximate IHSG level
-      ihsgChange: 0
-    };
+  } catch (error) {
+    console.error('Market context error, using fallback:', error instanceof Error ? error.message : 'Unknown error');
+    return getFallbackMarketContext();
   }
+}
+
+// Fallback market context yang robust
+function getFallbackMarketContext() {
+  // Return sensible fallback data
+  return { 
+    trend: 'SIDEWAYS', 
+    strength: 0, 
+    condition: 'Using fallback data - Yahoo API limited',
+    ihsgPrice: 7200, // Approximate IHSG level
+    ihsgChange: 0,
+    dataQuality: 'FALLBACK',
+    note: 'Consider using alternative data source for IHSG'
+  };
 }
 
 function calculateSignalStrength(rsi: number | null, sma20: number | null, ema12: number | null, price: number, volume?: number | null): number {
@@ -495,42 +577,85 @@ function calculateSignalStrength(rsi: number | null, sma20: number | null, ema12
 }
 
 // Retry logic for Yahoo Finance API with timeout
-async function retryYahooCall<T>(fn: () => Promise<T>, maxRetries = 1): Promise<T> {
+// async function retryYahooCall<T>(fn: () => Promise<T>, maxRetries = 1): Promise<T> {
+//   for (let i = 0; i <= maxRetries; i++) {
+//     try {
+//       if (i > 0) {
+//         await new Promise(resolve => setTimeout(resolve, 1000 * i));
+//       }
+      
+//       // Add timeout wrapper
+//       return await Promise.race([
+//         fn(),
+//         new Promise<never>((_, reject) => 
+//           setTimeout(() => reject(new Error('Request timeout')), 8000)
+//         )
+//       ]);
+//     } catch (error) {
+//       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      
+//       if (i < maxRetries && (
+//         errorMsg.includes('timeout') ||
+//         errorMsg.includes('Edge: Too') || 
+//         errorMsg.includes('not valid JSON') ||
+//         errorMsg.includes('Too Many Requests') ||
+//         errorMsg.includes('ECONNRESET') ||
+//         errorMsg.includes('ETIMEDOUT')
+//       )) {
+//         // Add longer delay for rate limit errors
+//         if (errorMsg.includes('Too Many Requests')) {
+//           await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+//         }
+//         continue;
+//       }
+      
+//       throw error;
+//     }
+//   }
+//   throw new Error('Max retries exceeded');
+// }
+
+// Improved retry logic dengan JSON parse error handling
+async function retryYahooCall<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
   for (let i = 0; i <= maxRetries; i++) {
     try {
       if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * i));
+        console.log(`Retry attempt ${i} for Yahoo API...`);
+        await new Promise(resolve => setTimeout(resolve, 2000 * i));
       }
       
-      // Add timeout wrapper
-      return await Promise.race([
+      const result = await Promise.race([
         fn(),
         new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 8000)
+          setTimeout(() => reject(new Error('Request timeout')), 15000) // Increased timeout
         )
       ]);
+      
+      return result;
+      
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       
-      if (i < maxRetries && (
-        errorMsg.includes('timeout') ||
-        errorMsg.includes('Edge: Too') || 
-        errorMsg.includes('not valid JSON') ||
-        errorMsg.includes('Too Many Requests') ||
-        errorMsg.includes('ECONNRESET') ||
-        errorMsg.includes('ETIMEDOUT')
-      )) {
-        // Add longer delay for rate limit errors
-        if (errorMsg.includes('Too Many Requests')) {
-          await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+      // Handle JSON parse errors specifically
+      if (errorMsg.includes('not valid JSON') || errorMsg.includes('Unexpected token') || errorMsg.includes('Too Many Requests')) {
+        console.log(`Yahoo API rate limited or JSON error (attempt ${i + 1}/${maxRetries + 1})`);
+        
+        if (i < maxRetries) {
+          // Wait longer for rate limit errors
+          await new Promise(resolve => setTimeout(resolve, 5000 * (i + 1)));
+          continue;
+        } else {
+          // Throw a more specific error after all retries
+          throw new Error('Yahoo Finance API unavailable due to rate limiting');
         }
-        continue;
       }
       
+      // Untuk error lainnya, throw langsung
       throw error;
     }
   }
-  throw new Error('Max retries exceeded');
+  
+  throw new Error('Max retries exceeded for Yahoo API');
 }
 
 // Memory cache for Vercel deployment

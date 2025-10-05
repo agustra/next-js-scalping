@@ -50,7 +50,15 @@ export const api = {
 
   // Local APIs
   getStockData: async () => {
-    const response = await fetch("/api/yahoo");
-    return response.json();
+    try {
+      const response = await fetch("/api/yahoo");
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Stock data fetch error:', error);
+      throw error;
+    }
   },
 };

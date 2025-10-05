@@ -32,6 +32,11 @@ const navItems: NavItem[] = [
   },
   {
     icon: <GridIcon />,
+    name: "IDX Stocks",
+    path: "/idx-stocks",
+  },
+  {
+    icon: <GridIcon />,
     name: "Backtest",
     path: "/backtest",
   },
