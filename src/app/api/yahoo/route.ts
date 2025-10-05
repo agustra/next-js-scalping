@@ -62,49 +62,62 @@ export async function GET() {
     
     console.log('🔄 Fetching fresh data...');
     
-    // Get market context (IHSG trend)
-    const marketContext = await getMarketCondition();
+    // Get market context with fallback
+    let marketContext;
+    try {
+      marketContext = await getMarketCondition();
+    } catch (error) {
+      console.error('Market context failed:', error);
+      marketContext = { trend: 'UNKNOWN', strength: 0, condition: 'Market data unavailable' };
+    }
     
-    // 1. Ambil data saham dari IDX
-    const idxResponse = await fetch(
-      "https://www.idx.co.id/primary/TradingSummary/GetStockSummary",
-      {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          Accept: "application/json, text/javascript, */*; q=0.01",
-          "X-Requested-With": "XMLHttpRequest",
-        },
-      }
-    );
-
-    if (!idxResponse.ok) {
-      throw new Error("Failed to fetch IDX data");
-    }
-
-    const idxData = await idxResponse.json();
-
-    // Validate IDX data structure
-    if (!idxData?.data || !Array.isArray(idxData.data)) {
-      throw new Error("Invalid IDX data structure");
-    }
-
-    // 2. Ambil simbol aktif, sort by volume, convert ke format Yahoo
-    const symbols: string[] = idxData.data
-      .filter((stock: { Volume: string; StockCode: string }) => {
-        const volume = Number(stock.Volume);
-        return !isNaN(volume) && volume > 0 && stock.StockCode;
-      })
-      .sort((a: { Volume: string }, b: { Volume: string }) => 
-        Number(b.Volume) - Number(a.Volume) // Sort by volume DESC
-      )
-      .map((stock: { StockCode: string }) => `${stock.StockCode}.JK`);
-
-    if (symbols.length === 0) {
-      return NextResponse.json(
-        { error: "No active IDX stocks found" },
-        { status: 404 }
+    // 1. Ambil data saham dari IDX dengan fallback
+    let symbols: string[] = [];
+    let totalIDX = 0;
+    
+    try {
+      const idxResponse = await fetch(
+        "https://www.idx.co.id/primary/TradingSummary/GetStockSummary",
+        {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            Accept: "application/json, text/javascript, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          timeout: 10000 // 10 second timeout
+        }
       );
+
+      if (idxResponse.ok) {
+        const idxData = await idxResponse.json();
+        
+        if (idxData?.data && Array.isArray(idxData.data)) {
+          totalIDX = idxData.data.length;
+          symbols = idxData.data
+            .filter((stock: { Volume: string; StockCode: string }) => {
+              const volume = Number(stock.Volume);
+              return !isNaN(volume) && volume > 0 && stock.StockCode;
+            })
+            .sort((a: { Volume: string }, b: { Volume: string }) => 
+              Number(b.Volume) - Number(a.Volume)
+            )
+            .map((stock: { StockCode: string }) => `${stock.StockCode}.JK`);
+        }
+      }
+    } catch (error) {
+      console.error('IDX API failed:', error);
+    }
+    
+    // Fallback to popular IDX stocks if API fails
+    if (symbols.length === 0) {
+      symbols = [
+        'BBCA.JK', 'BBRI.JK', 'BMRI.JK', 'TLKM.JK', 'ASII.JK',
+        'UNVR.JK', 'ICBP.JK', 'KLBF.JK', 'INDF.JK', 'GGRM.JK',
+        'SMGR.JK', 'PGAS.JK', 'ADRO.JK', 'ITMG.JK', 'PTBA.JK'
+      ];
+      totalIDX = symbols.length;
+      console.log('Using fallback stock symbols');
     }
 
     // 3. Get enhanced data with indicators
@@ -227,7 +240,7 @@ export async function GET() {
     const responseData = {
       source: "IDX + Yahoo Finance + Enhanced Technical Analysis + Risk Management",
       marketContext,
-      totalIDX: idxData.data.length,
+      totalIDX,
       totalActive: symbols.length,
       totalQuotes: sortedResults.length,
       quotes: sortedResults,
@@ -467,24 +480,34 @@ function calculateSignalStrength(rsi: number | null, sma20: number | null, ema12
   return Math.max(-5, Math.min(5, strength));
 }
 
-// Retry logic for Yahoo Finance API
-async function retryYahooCall<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
+// Retry logic for Yahoo Finance API with timeout
+async function retryYahooCall<T>(fn: () => Promise<T>, maxRetries = 1): Promise<T> {
   for (let i = 0; i <= maxRetries; i++) {
     try {
       if (i > 0) {
-        // Add delay between retries
-        await new Promise(resolve => setTimeout(resolve, 500 * i));
+        await new Promise(resolve => setTimeout(resolve, 1000 * i));
       }
-      return await fn();
+      
+      // Add timeout wrapper
+      return await Promise.race([
+        fn(),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 8000)
+        )
+      ]);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       
-      // If it's a rate limit or HTML response error, retry
-      if (i < maxRetries && (errorMsg.includes('Edge: Too') || errorMsg.includes('not valid JSON'))) {
+      if (i < maxRetries && (
+        errorMsg.includes('timeout') ||
+        errorMsg.includes('Edge: Too') || 
+        errorMsg.includes('not valid JSON') ||
+        errorMsg.includes('ECONNRESET') ||
+        errorMsg.includes('ETIMEDOUT')
+      )) {
         continue;
       }
       
-      // If max retries reached or different error, throw
       throw error;
     }
   }
