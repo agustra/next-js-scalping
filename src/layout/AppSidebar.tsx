@@ -41,6 +41,11 @@ const navItems: NavItem[] = [
     path: "/backtest",
   },
   {
+    icon: <BoltIcon />,
+    name: "Bandar Scanner",
+    path: "/bandar-scanner",
+  },
+  {
     icon: <UserCircleIcon />,
     name: "User Profile",
     path: "/profile",

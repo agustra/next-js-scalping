@@ -72,6 +72,7 @@ interface BandarStockResult {
     positionSize: string;
     maxHoldTime: string;
   };
+  volatility: number;
 }
 
 // ✅ SIMPLE BANDAR DETECTION
@@ -209,6 +210,23 @@ function simulateHistoricalData(stock: IDXStockData): Array<{ close: number; hig
   return historical;
 }
 
+// ✅ CHECK MARKET STATUS
+function getMarketStatus(): 'OPEN' | 'CLOSED' | 'PRE_MARKET' | 'POST_MARKET' {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const currentTime = hours * 100 + minutes;
+  const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
+  
+  if (!isWeekday) return 'CLOSED';
+  
+  if (currentTime >= 830 && currentTime < 900) return 'PRE_MARKET';
+  if (currentTime >= 900 && currentTime <= 1530) return 'OPEN';
+  if (currentTime > 1530 && currentTime <= 1600) return 'POST_MARKET';
+  
+  return 'CLOSED';
+}
+
 // ✅ CALCULATE RISK LEVEL
 function calculateRiskLevel(stock: IDXStockData, volatility: number): 'LOW' | 'MEDIUM' | 'HIGH' {
   const volume = stock.Volume;
@@ -256,12 +274,48 @@ function calculateDayTradePotential(stock: IDXStockData, riskLevel: 'LOW' | 'MED
   };
 }
 
+// Cache response interface
+interface CacheData {
+  source: string;
+  timestamp: number;
+  totalScanned: number;
+  displayed: number;
+  marketStatus: string;
+  strategy: string;
+  dayTradingRules: {
+    priceRange: number[];
+    minVolume: string;
+    targetProfit: string;
+    stopLoss: string;
+    maxHoldTime: string;
+    positionSize: string;
+    exitStrategy: string[];
+  };
+  stocks: BandarStockResult[];
+}
+
+// Simple in-memory cache
+let cache: { data: CacheData; timestamp: number } | null = null;
+const CACHE_DURATION = 30000; // 30 seconds
+
 export async function GET() {
   try {
     console.log('🎯 Scanning for Bandar Patterns...');
     
-    // 1. Fetch data from IDX
-    const idxResponse = await fetch('https://divine-moon-d133.agusta-usk.workers.dev/');
+    // Check cache first
+    if (cache && Date.now() - cache.timestamp < CACHE_DURATION) {
+      console.log('📦 Returning cached data');
+      return NextResponse.json(cache.data);
+    }
+    
+    // 1. Fetch data from IDX with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    
+    const idxResponse = await fetch('https://divine-moon-d133.agusta-usk.workers.dev/', {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
     
     if (!idxResponse.ok) {
       throw new Error(`Failed to fetch IDX data: ${idxResponse.status}`);
@@ -286,10 +340,8 @@ export async function GET() {
 
     console.log(`📊 Found ${targetStocks.length} stocks in range 50-100`);
 
-    // 3. Process stocks dengan bandar detection
-    const results: BandarStockResult[] = [];
-
-    for (const stock of targetStocks.slice(0, 100)) { // Process max 100 stocks
+    // 3. Process stocks dengan parallel processing
+    const processStock = (stock: IDXStockData): BandarStockResult | null => {
       try {
         const historicalData = simulateHistoricalData(stock);
         const closes = historicalData.map(h => h.close);
@@ -309,14 +361,14 @@ export async function GET() {
         // Generate signal
         const { signal, strength } = generateBandarAwareSignal(stock, currentRSI, currentSMA, currentEMA);
         
-        // Calculate risk
-        const volatility = Math.random() * 0.06; // Simplified volatility
+        // Calculate risk with actual volatility
+        const volatility = Math.abs(stock.Change / stock.Previous) || 0.03;
         const riskLevel = calculateRiskLevel(stock, volatility);
         
         // Calculate day trade potential
         const dayTradePotential = calculateDayTradePotential(stock, riskLevel);
 
-        results.push({
+        return {
           symbol: stock.StockCode,
           name: stock.StockName,
           price: stock.Close,
@@ -345,12 +397,23 @@ export async function GET() {
               ((stock.ForeignBuy + stock.ForeignSell) / stock.Volume) * 100 : 0
           },
           riskLevel,
-          dayTradePotential
-        });
-
+          dayTradePotential,
+          volatility
+        };
       } catch (error) {
         console.error(`Failed to process ${stock.StockCode}:`, error);
+        return null;
       }
+    };
+
+    // Process stocks in parallel (chunks of 10)
+    const results: BandarStockResult[] = [];
+    const chunkSize = 10;
+    
+    for (let i = 0; i < targetStocks.length; i += chunkSize) {
+      const chunk = targetStocks.slice(i, i + chunkSize);
+      const chunkResults = await Promise.all(chunk.map(processStock));
+      results.push(...chunkResults.filter(Boolean) as BandarStockResult[]);
     }
 
     // 4. Sort by bandar confidence dan signal strength
@@ -374,7 +437,7 @@ export async function GET() {
       timestamp: Date.now(),
       totalScanned: targetStocks.length,
       displayed: sortedResults.length,
-      marketStatus: "CLOSED",
+      marketStatus: getMarketStatus(),
       strategy: "Day Trading: Bandar Accumulation Detection (Rp 50-100)",
       dayTradingRules: {
         priceRange: [50, 100],
@@ -385,10 +448,16 @@ export async function GET() {
         positionSize: "3-5% capital",
         exitStrategy: ["Profit 4-6% → TAKE PROFIT", "EOD → CLOSE POSITION", "Stop loss hit → CUT LOSS"]
       },
-      stocks: sortedResults.slice(0, 50) // Top 50 results
+      stocks: sortedResults // All results in range 50-100
     };
 
     console.log(`🎯 Bandar scan completed: ${sortedResults.filter(s => s.bandarSignal === 'ACCUMULATION').length} accumulation signals`);
+
+    // Cache the response
+    cache = {
+      data: responseData,
+      timestamp: Date.now()
+    };
 
     return NextResponse.json(responseData);
 
