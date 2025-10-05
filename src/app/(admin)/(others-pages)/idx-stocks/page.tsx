@@ -103,6 +103,8 @@ export default function IDXStocksPage() {
       try {
         const response = await fetch("/api/idx");
         const data = await response.json();
+        console.log("IDX Data:", data.data);
+        
         setStocks(data.stocks || []);
         setStats({
           totalStocks: data.totalStocks || 0,

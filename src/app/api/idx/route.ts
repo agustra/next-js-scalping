@@ -109,54 +109,55 @@ export async function GET() {
     
     // 1. Ambil data saham dari IDX melalui proxy internal
     // const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
-    // const idxResponse = await fetch(`${baseUrl}/api/idx-proxy`);
-
-    // if (!idxResponse.ok) {
-    //   throw new Error(`Failed to fetch IDX data: ${idxResponse.status}`);
-    // }
-
-    // const idxData = await idxResponse.json();
-
-    // if (!idxData?.data || !Array.isArray(idxData.data)) {
-    //   throw new Error("Invalid IDX data structure");
-    // }
-
-    // 1. Ambil data saham IDX — otomatis pakai Worker di production, proxy local di development
-    const workerUrl =
-      process.env.NODE_ENV === "production"
-        ? process.env.IDX_WORKER_URL || "https://divine-moon-d133.agusta-usk.workers.dev"
-        : "http://localhost:3000/api/idx-proxy";
-
-    console.log("📡 Fetching IDX data from:", workerUrl);
-
-    const idxResponse = await fetch(workerUrl, {
-      cache: "no-store",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; IDXFetcher/1.0)",
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-      },
-    });
+    // const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+    const idxResponse = await fetch(`https://divine-moon-d133.agusta-usk.workers.dev`);
 
     if (!idxResponse.ok) {
       throw new Error(`Failed to fetch IDX data: ${idxResponse.status}`);
     }
 
-    const text = await idxResponse.text();
-
-    // Parsing defensif karena kadang Cloudflare balas HTML jika ter-block
-    let idxData;
-    try {
-      idxData = JSON.parse(text);
-    } catch {
-      console.error("❌ IDX response not valid JSON:", text.slice(0, 500));
-      throw new Error("IDX returned non-JSON response");
-    }
+    const idxData = await idxResponse.json();
 
     if (!idxData?.data || !Array.isArray(idxData.data)) {
       throw new Error("Invalid IDX data structure");
     }
 
-    console.log(`✅ IDX success: ${idxData.data.length} records loaded`);
+    // 1. Ambil data saham IDX — otomatis pakai Worker di production, proxy local di development
+    // const workerUrl =
+    //   process.env.NODE_ENV === "production"
+    //     ? process.env.IDX_WORKER_URL || "https://divine-moon-d133.agusta-usk.workers.dev"
+    //     : "http://localhost:3000/api/idx-proxy";
+
+    // console.log("📡 Fetching IDX data from:", workerUrl);
+
+    // const idxResponse = await fetch(workerUrl, {
+    //   cache: "no-store",
+    //   headers: {
+    //     "User-Agent": "Mozilla/5.0 (compatible; IDXFetcher/1.0)",
+    //     "Accept": "application/json, text/javascript, */*; q=0.01",
+    //   },
+    // });
+
+    // if (!idxResponse.ok) {
+    //   throw new Error(`Failed to fetch IDX data: ${idxResponse.status}`);
+    // }
+
+    // const text = await idxResponse.text();
+
+    // // Parsing defensif karena kadang Cloudflare balas HTML jika ter-block
+    // let idxData;
+    // try {
+    //   idxData = JSON.parse(text);
+    // } catch {
+    //   console.error("❌ IDX response not valid JSON:", text.slice(0, 500));
+    //   throw new Error("IDX returned non-JSON response");
+    // }
+
+    // if (!idxData?.data || !Array.isArray(idxData.data)) {
+    //   throw new Error("Invalid IDX data structure");
+    // }
+
+    // console.log(`✅ IDX success: ${idxData.data.length} records loaded`);
 
 
     // 2. Filter dan proses saham aktif
