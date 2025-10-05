@@ -921,7 +921,7 @@ function getRiskAnalysis(stocks: EnhancedStockResult[]) {
 
 function getMarketStatus(): { isOpen: boolean; nextOpen?: string; nextClose?: string; message: string; currentTime: string } {
   const now = new Date();
-  const jakartaTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Jakarta"}));
+  const jakartaTime = new Date(now.toLocaleString("id-ID", {timeZone: "Asia/Jakarta"}));
   const hour = jakartaTime.getHours();
   const day = jakartaTime.getDay();
   
