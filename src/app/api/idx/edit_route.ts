@@ -82,100 +82,27 @@ interface CachedData {
   data: EnhancedStockResult[];
 }
 
-interface CacheConfig {
-  tradingHoursTTL: number;
-  nonTradingHoursTTL: number;
-  maxCacheSize: number;
-  cleanupInterval: number;
-}
 
-interface ResponseData {
-  source: string;
-  timestamp: number;
-  totalStocks: number;
-  activeStocks: number;
-  processedStocks: number;
-  displayedStocks: number;
-  signalSummary: {
-    buy: number;
-    sell: number;
-    hold: number;
-    strongBuy: number;
-    strongSell: number;
-  };
-  marketSummary: ReturnType<typeof getMarketSummary>;
-  sectorAnalysis: ReturnType<typeof getSectorAnalysis>;
-  volumeProfile: ReturnType<typeof getVolumeProfile>;
-  momentumAnalysis: ReturnType<typeof getMomentumAnalysis>;
-  riskAnalysis: ReturnType<typeof getRiskAnalysis>;
-  marketStatus: { isOpen: boolean; nextOpen?: string; nextClose?: string; message: string; currentTime: string };
-  stocks: EnhancedStockResult[];
-  cached: boolean;
-  performance?: {
-    processingTime: number;
-    stocksPerSecond: number;
-    memoryUsage: number;
-  };
-  cacheInfo?: {
-    cached: boolean;
-    cacheKey: string;
-    forceRefresh: boolean;
-    cacheSize: number;
-    cacheEnabled: boolean;
-  };
-}
 
-// Enhanced Cache Configuration
-const cacheConfig: CacheConfig = {
-  tradingHoursTTL: 1 * 60 * 1000, // 1 menit saat market buka
-  nonTradingHoursTTL: 5 * 60 * 1000, // 5 menit saat market tutup
-  maxCacheSize: 50, // Maximum 50 cache entries
-  cleanupInterval: 10 * 60 * 1000 // 10 menit
-};
-
-// Memory cache dengan enhanced management
+// Memory cache
 const memoryCache = new Map<string, { data: CachedData; timestamp: number }>();
 
-// Initialize cache cleanup
-setInterval(cleanOldCache, cacheConfig.cleanupInterval);
-
-export async function GET(request: Request) {
+export async function GET() {
   const startTime = Date.now();
   
   try {
-    const url = new URL(request.url);
-    const forceRefresh = url.searchParams.get('refresh') === 'true';
-    const skipCache = url.searchParams.get('nocache') === 'true';
-    
-    // Cache management (skip if forced refresh)
+    // Cache management
     const cacheKey = getCacheKey();
-    let cachedData = null;
+    const cachedData = getCachedData(cacheKey);
     
-    if (!forceRefresh && !skipCache) {
-      cachedData = getCachedData(cacheKey);
-    }
-    
-    if (cachedData && !forceRefresh) {
+    if (cachedData) {
       console.log('📦 Serving from cache');
       return NextResponse.json({
         ...cachedData,
         source: cachedData.source + ' (Cached)',
         cached: true,
-        cacheTime: new Date(cachedData.timestamp).toISOString(),
-        cacheInfo: {
-          cached: true,
-          cacheKey,
-          forceRefresh: false,
-          cacheSize: memoryCache.size,
-          cacheEnabled: true
-        }
+        cacheTime: new Date(cachedData.timestamp).toISOString()
       });
-    }
-    
-    if (forceRefresh) {
-      console.log('🔄 Force refresh requested');
-      // Clear specific cache
-      memoryCache.delete(cacheKey);
     }
     
     console.log('🔄 Fetching fresh data from IDX...');
@@ -192,6 +119,7 @@ export async function GET(request: Request) {
       throw new Error("Invalid IDX data structure");
     }
 
+
     // 2. Filter dan proses saham aktif
     const activeStocks = idxData.data.filter((stock: IDXStockData) => {
       return (
@@ -202,7 +130,7 @@ export async function GET(request: Request) {
       );
     });
 
-    console.log(`📊 Processing ${activeStocks.length} active stocks from ${idxData.data.length} total stocks`);
+    console.log(`📊 Processing ${activeStocks.length} active stocks`);
 
     // 3. Process stocks dengan technical indicators
     const processedStocks = await processStocksWithIndicators(activeStocks);
@@ -249,14 +177,7 @@ export async function GET(request: Request) {
       riskAnalysis,
       marketStatus,
       stocks: sortedStocks,
-      cached: false,
-      cacheInfo: {
-        cached: false,
-        cacheKey,
-        forceRefresh,
-        cacheSize: memoryCache.size,
-        cacheEnabled: !skipCache
-      }
+      cached: false
     };
 
     // 8. Add performance metrics
@@ -267,11 +188,8 @@ export async function GET(request: Request) {
       memoryUsage: Number((process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2))
     };
     
-    // 9. Cache the result (skip if requested)
-    if (!skipCache) {
-      setCachedData(cacheKey, responseData);
-    }
-    
+    // 9. Cache the result
+    setCachedData(cacheKey, responseData);
     console.log(`⚡ Processing completed in ${processingTime}ms`);
     console.log(`📈 Market Status: ${marketStatus.isOpen ? 'OPEN' : 'CLOSED'}`);
     console.log(`🎯 Processed ${sortedStocks.length} stocks with ${signalSummary.strongBuy + signalSummary.buy} buy signals`);
@@ -293,221 +211,6 @@ export async function GET(request: Request) {
   }
 }
 
-// Cache Management Functions
-function getCacheKey(): string {
-  const now = new Date();
-  const marketHours = getMarketHours(now);
-  
-  // Cache duration based on market hours
-  const cacheDuration = marketHours.isTradingHours ? 
-    cacheConfig.tradingHoursTTL : cacheConfig.nonTradingHoursTTL;
-  
-  // Create time-based cache key
-  const roundedTime = new Date(
-    Math.floor(now.getTime() / cacheDuration) * cacheDuration
-  );
-  
-  // Add data fingerprint untuk ensure data completeness
-  const dateKey = `${roundedTime.getFullYear()}${(roundedTime.getMonth() + 1).toString().padStart(2, '0')}${roundedTime.getDate().toString().padStart(2, '0')}`;
-  const hourKey = marketHours.isTradingHours ? `H${roundedTime.getHours()}` : 'CLOSED';
-  
-  return `idx-stocks-${dateKey}-${hourKey}-${roundedTime.getTime()}`;
-}
-
-function getCachedData(cacheKey: string): CachedData | null {
-  const cached = memoryCache.get(cacheKey);
-  if (!cached) return null;
-  
-  const now = Date.now();
-  const cacheAge = now - cached.timestamp;
-  
-  // Dynamic TTL based on market hours
-  const marketHours = getMarketHours(new Date());
-  const maxAge = marketHours.isTradingHours ? 
-    cacheConfig.tradingHoursTTL : cacheConfig.nonTradingHoursTTL;
-  
-  // Additional validation: check if data is complete
-  if (cacheAge < maxAge && isDataComplete(cached.data)) {
-    console.log(`✅ Cache HIT: ${cached.data.data.length} stocks served`);
-    return cached.data;
-  } else {
-    // Remove expired or incomplete cache
-    memoryCache.delete(cacheKey);
-    console.log(`🗑️ Cache expired/incomplete: ${cacheAge}ms old`);
-    return null;
-  }
-}
-
-function isDataComplete(cachedData: CachedData): boolean {
-  if (!cachedData?.data || !Array.isArray(cachedData.data)) {
-    return false;
-  }
-  
-  const stocks = cachedData.data;
-  
-  // Check minimum data requirements
-  if (stocks.length < 50) {
-    console.warn(`⚠️ Cache data incomplete: only ${stocks.length} stocks`);
-    return false;
-  }
-  
-  // Check data freshness (within expected timeframe)
-  const dataAge = Date.now() - cachedData.timestamp;
-  const maxDataAge = 10 * 60 * 1000; // 10 menit maximum
-  
-  if (dataAge > maxDataAge) {
-    console.warn(`⚠️ Cache data too old: ${Math.round(dataAge / 1000 / 60)} minutes`);
-    return false;
-  }
-  
-  // Check if key stocks are present (sample check)
-  const keyStocks = ['BBCA.JK', 'BBRI.JK', 'BMRI.JK', 'TLKM.JK'];
-  const hasKeyStocks = keyStocks.some(symbol => 
-    stocks.some(stock => stock.symbol === symbol)
-  );
-  
-  if (!hasKeyStocks) {
-    console.warn('⚠️ Cache missing key stocks');
-    return false;
-  }
-  
-  return true;
-}
-
-function setCachedData(cacheKey: string, data: ResponseData): void {
-  // Validate data sebelum caching
-  if (!isValidForCaching(data)) {
-    console.warn('🚫 Data not suitable for caching');
-    return;
-  }
-  
-  // Clean old cache sebelum add baru
-  cleanOldCache();
-  
-  // Limit cache size
-  if (memoryCache.size >= cacheConfig.maxCacheSize) {
-    const oldestKey = Array.from(memoryCache.keys())[0];
-    memoryCache.delete(oldestKey);
-    console.log(`🧹 Removed oldest cache: ${oldestKey}`);
-  }
-  
-  memoryCache.set(cacheKey, {
-    data: {
-      source: "IDX Complete Data + Technical Analysis",
-      timestamp: data.timestamp,
-      data: data.stocks
-    },
-    timestamp: Date.now()
-  });
-  
-  console.log(`💾 Cached ${data.stocks.length} stocks with key: ${cacheKey}`);
-}
-
-function isValidForCaching(data: ResponseData): boolean {
-  // Basic validation
-  if (!data?.stocks || !Array.isArray(data.stocks)) {
-    return false;
-  }
-  
-  // Minimum stocks threshold
-  if (data.stocks.length < 50) {
-    console.warn(`🚫 Too few stocks for caching: ${data.stocks.length}`);
-    return false;
-  }
-  
-  // Check if data has required fields
-  const sampleStock = data.stocks[0];
-  if (!sampleStock?.symbol || !sampleStock?.price || !sampleStock?.signal) {
-    console.warn('🚫 Incomplete stock data structure');
-    return false;
-  }
-  
-  // Check signal distribution (should have variety)
-  const signals = data.stocks.map(s => s.signal);
-  const uniqueSignals = new Set(signals);
-  if (uniqueSignals.size < 2) {
-    console.warn('🚫 Insufficient signal variety for caching');
-    return false;
-  }
-  
-  return true;
-}
-
-function cleanOldCache(): void {
-  const now = Date.now();
-  let cleanedCount = 0;
-  
-  for (const [key, value] of memoryCache.entries()) {
-    const cacheAge = now - value.timestamp;
-    const marketHours = getMarketHours(new Date(value.timestamp));
-    const maxAge = marketHours.isTradingHours ? 
-      cacheConfig.tradingHoursTTL : cacheConfig.nonTradingHoursTTL;
-    
-    if (cacheAge > maxAge) {
-      memoryCache.delete(key);
-      cleanedCount++;
-    }
-  }
-  
-  if (cleanedCount > 0) {
-    console.log(`🧹 Cleaned ${cleanedCount} expired cache entries`);
-  }
-}
-
-// Cache Management Endpoint
-export async function POST(request: Request) {
-  try {
-    const { action } = await request.json();
-    
-    switch (action) {
-      case 'clear':
-        const sizeBefore = memoryCache.size;
-        memoryCache.clear();
-        return NextResponse.json({
-          message: `Cache cleared (${sizeBefore} entries removed)`,
-          timestamp: Date.now(),
-          cacheSize: memoryCache.size
-        });
-        
-      case 'status':
-        const cacheEntries = Array.from(memoryCache.entries()).map(([key, value]) => ({
-          key,
-          age: Date.now() - value.timestamp,
-          stocks: value.data.data.length,
-          timestamp: new Date(value.timestamp).toISOString()
-        }));
-        
-        return NextResponse.json({
-          cacheSize: memoryCache.size,
-          cacheEntries,
-          memoryUsage: process.memoryUsage(),
-          cacheConfig,
-          timestamp: Date.now()
-        });
-        
-      case 'cleanup':
-        const beforeSize = memoryCache.size;
-        cleanOldCache();
-        const afterSize = memoryCache.size;
-        return NextResponse.json({
-          message: `Cache cleanup completed`,
-          removed: beforeSize - afterSize,
-          remaining: afterSize,
-          timestamp: Date.now()
-        });
-        
-      default:
-        return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
-    }
-  } catch (error) {
-    return NextResponse.json({ 
-      error: 'Invalid request',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 400 });
-  }
-}
-
-// Existing functions (tetap sama seperti sebelumnya)
 async function processStocksWithIndicators(stocks: IDXStockData[]): Promise<EnhancedStockResult[]> {
   const results: EnhancedStockResult[] = [];
   const errors: { symbol: string; error: string }[] = [];
@@ -545,6 +248,8 @@ async function processStocksWithIndicators(stocks: IDXStockData[]): Promise<Enha
 }
 
 async function processSingleStock(stock: IDXStockData): Promise<EnhancedStockResult> {
+  // Simulate historical data from current day data (for demo)
+  // In real implementation, you'd fetch historical data from IDX
   const historicalData = simulateHistoricalData(stock);
   
   const closes = historicalData.map(h => h.close);
@@ -658,26 +363,36 @@ async function processSingleStock(stock: IDXStockData): Promise<EnhancedStockRes
 }
 
 function simulateHistoricalData(stock: IDXStockData): Array<{close: number; high: number; low: number}> {
+  // Enhanced historical data simulation with trend and volatility modeling
   const historical = [];
   const basePrice = stock.Previous;
   const dailyVolatility = Math.max(Math.abs(stock.Change) / basePrice, 0.01);
   
+  // Create trend component based on current change
   const trendDirection = stock.Change > 0 ? 1 : stock.Change < 0 ? -1 : 0;
   const trendStrength = Math.min(Math.abs(stock.Change) / basePrice, 0.05);
   
-  let currentPrice = basePrice * 0.95;
+  let currentPrice = basePrice * 0.95; // Start from lower base
   
   for (let i = 30; i > 0; i--) {
+    // Add trend component (stronger at beginning, weaker at end)
     const trendFactor = (trendDirection * trendStrength * (i / 30)) / 30;
+    
+    // Add random walk with volatility clustering
     const randomWalk = (Math.random() - 0.5) * dailyVolatility * 2;
+    
+    // Mean reversion component
     const meanReversion = (basePrice - currentPrice) / basePrice * 0.1;
     
+    // Calculate next price
     const priceChange = trendFactor + randomWalk + meanReversion;
     currentPrice = currentPrice * (1 + priceChange);
     
+    // Ensure price stays positive and reasonable
     currentPrice = Math.max(currentPrice, basePrice * 0.5);
     currentPrice = Math.min(currentPrice, basePrice * 1.5);
     
+    // Generate OHLC with realistic intraday movement
     const intradayVolatility = dailyVolatility * 0.5;
     const high = currentPrice * (1 + Math.random() * intradayVolatility);
     const low = currentPrice * (1 - Math.random() * intradayVolatility);
@@ -689,6 +404,7 @@ function simulateHistoricalData(stock: IDXStockData): Array<{close: number; high
     });
   }
   
+  // Add actual current day data
   historical.push({
     close: stock.Close,
     high: stock.High,
@@ -714,6 +430,7 @@ function generateTradingSignal(params: {
   let bullishSignals = 0;
   let bearishSignals = 0;
   
+  // RSI Signals
   if (rsi < 25) bullishSignals += 3;
   else if (rsi < 35) bullishSignals += 2;
   else if (rsi < 45) bullishSignals += 1;
@@ -721,6 +438,7 @@ function generateTradingSignal(params: {
   else if (rsi > 65) bearishSignals += 2;
   else if (rsi > 55) bearishSignals += 1;
   
+  // Moving Average Signals
   const emaAboveSma = ema > sma;
   const priceAboveSma = price > sma;
   
@@ -729,22 +447,28 @@ function generateTradingSignal(params: {
   else if (!emaAboveSma && !priceAboveSma) bearishSignals += 2;
   else if (!emaAboveSma) bearishSignals += 1;
   
+  // Volume Confirmation
   if (volume > 1000000) bullishSignals += 1;
   else if (volume < 100000) bearishSignals += 1;
   
+  // Foreign Activity
   if (foreignNet > 1000000) bullishSignals += 1;
   else if (foreignNet < -1000000) bearishSignals += 1;
   
+  // Bid-Ask Spread (tight spread is better)
   if (bidAskSpread / price < 0.01) bullishSignals += 1;
   else if (bidAskSpread / price > 0.03) bearishSignals += 1;
   
+  // Advanced signal weighting with confidence scoring
   const netSignals = bullishSignals - bearishSignals;
   const totalSignals = bullishSignals + bearishSignals;
   const confidence = totalSignals > 0 ? Math.abs(netSignals) / totalSignals : 0;
   
+  // Market condition adjustment
   const marketCondition = getMarketCondition(price, volume, foreignNet);
   const adjustedSignals = netSignals * marketCondition;
   
+  // Signal generation with confidence threshold
   if (adjustedSignals >= 4 && confidence > 0.6) return 'STRONG_BUY';
   if (adjustedSignals >= 2 && confidence > 0.4) return 'BUY';
   if (adjustedSignals <= -4 && confidence > 0.6) return 'STRONG_SELL';
@@ -756,11 +480,14 @@ function generateTradingSignal(params: {
 function getMarketCondition(price: number, volume: number, foreignNet: number): number {
   let condition = 1.0;
   
+  // Volume condition (higher volume = more reliable)
   if (volume > 5000000) condition *= 1.2;
   else if (volume < 500000) condition *= 0.8;
   
+  // Foreign activity condition
   if (Math.abs(foreignNet) > 1000000) condition *= 1.1;
   
+  // Price level condition (avoid penny stocks)
   if (price < 100) condition *= 0.9;
   else if (price > 1000) condition *= 1.1;
   
@@ -781,6 +508,7 @@ function calculateSignalStrength(params: {
   
   let strength = 0;
   
+  // RSI Strength
   if (rsi < 25) strength += 3;
   else if (rsi < 35) strength += 2;
   else if (rsi < 45) strength += 1;
@@ -788,19 +516,23 @@ function calculateSignalStrength(params: {
   else if (rsi > 65) strength -= 2;
   else if (rsi > 55) strength -= 1;
   
+  // Trend Strength
   const trendStrength = (ema - sma) / sma * 100;
   if (trendStrength > 2) strength += 2;
   else if (trendStrength > 0.5) strength += 1;
   else if (trendStrength < -2) strength -= 2;
   else if (trendStrength < -0.5) strength -= 1;
   
+  // Price vs SMA
   const priceVsSma = (price - sma) / sma * 100;
   if (priceVsSma > 3) strength += 1;
   else if (priceVsSma < -3) strength -= 1;
   
+  // Volume Strength
   if (volume > 5000000) strength += 1;
   else if (volume < 100000) strength -= 1;
   
+  // Foreign Activity Strength
   if (foreignNet > 2000000) strength += 1;
   else if (foreignNet < -2000000) strength -= 1;
   
@@ -812,10 +544,17 @@ function calculateRiskMetrics(historical: Array<{close: number; high: number; lo
   const highs = historical.map(h => h.high);
   const lows = historical.map(h => h.low);
   
+  // Calculate ATR
   const atr = calculateATR(historical);
+  
+  // Calculate volatility (standard deviation)
   const volatility = calculateVolatility(closes);
+  
+  // Support and Resistance
   const support = Math.min(...lows.slice(-10));
   const resistance = Math.max(...highs.slice(-10));
+  
+  // Risk-Reward Ratio
   const stopLoss = support;
   const takeProfit = resistance;
   const riskRewardRatio = (takeProfit - currentPrice) / (currentPrice - stopLoss);
@@ -866,69 +605,101 @@ function getMarketSummary(stocks: IDXStockData[]) {
   };
 }
 
+// Enhanced caching dengan different TTL berdasarkan market hours
+function getCacheKey(): string {
+  const now = new Date();
+  const marketHours = getMarketHours(now);
+  
+  // Different cache duration based on market hours
+  const cacheDuration = marketHours.isTradingHours ? 1 : 5; // minutes
+  
+  const roundedTime = new Date(
+    Math.floor(now.getTime() / (cacheDuration * 60 * 1000)) * (cacheDuration * 60 * 1000)
+  );
+  
+  return `idx-stocks-${roundedTime.getTime()}`;
+}
+
 function getMarketHours(now: Date) {
   const hour = now.getHours();
   const day = now.getDay();
   
-  const isWeekday = day >= 1 && day <= 5;
-  const isTradingHours = hour >= 9 && hour < 16;
+  const isWeekday = day >= 1 && day <= 5; // Monday to Friday
+  const isTradingHours = hour >= 9 && hour < 16; // 9 AM to 4 PM
   
   return { isWeekday, isTradingHours };
 }
 
-function getMarketStatus(): { isOpen: boolean; nextOpen?: string; nextClose?: string; message: string; currentTime: string } {
-  try {
-    const now = new Date();
-    const jakartaOffset = 7 * 60 * 60 * 1000;
-    const jakartaTime = new Date(now.getTime() + jakartaOffset);
-    
-    const hour = jakartaTime.getUTCHours();
-    const day = jakartaTime.getUTCDay();
-    
-    const isWeekday = day >= 1 && day <= 5;
-    const isTradingHours = hour >= 9 && hour < 16;
-    const isOpen = isWeekday && isTradingHours;
-    
-    let message = '';
-    const nextOpen = '';
-    let nextClose = '';
-    
-    if (isOpen) {
-      const closeTime = new Date(jakartaTime);
-      closeTime.setUTCHours(16, 0, 0, 0);
-      const timeToClose = closeTime.getTime() - jakartaTime.getTime();
-      const hoursToClose = Math.floor(timeToClose / (1000 * 60 * 60));
-      const minutesToClose = Math.floor((timeToClose % (1000 * 60 * 60)) / (1000 * 60));
-      
-      message = `Market open - Closes in ${hoursToClose}h ${minutesToClose}m`;
-      nextClose = closeTime.toISOString();
-    } else {
-      if (!isWeekday) {
-        message = `Market closed - Weekend`;
-      } else if (hour < 9) {
-        message = `Market closed - Opens at 09:00`;
-      } else {
-        message = `Market closed - Opens tomorrow at 09:00`;
-      }
-    }
-    
-    return { 
-      isOpen, 
-      nextOpen, 
-      nextClose,
-      message,
-      currentTime: jakartaTime.toISOString()
-    };
-  } catch {
-    return {
-      isOpen: false,
-      message: 'Market status unavailable',
-      currentTime: new Date().toISOString()
-    };
+function getCachedData(cacheKey: string): CachedData | null {
+  const cached = memoryCache.get(cacheKey);
+  if (!cached) return null;
+  
+  const now = Date.now();
+  const cacheAge = now - cached.timestamp;
+  const maxAge = 2 * 60 * 1000; // 2 minutes cache
+  
+  if (cacheAge < maxAge) {
+    return cached.data;
+  } else {
+    memoryCache.delete(cacheKey);
+    return null;
   }
 }
 
-// Sector mapping dan analysis functions (tetap sama)
+interface ResponseData {
+  source: string;
+  timestamp: number;
+  totalStocks: number;
+  activeStocks: number;
+  processedStocks: number;
+  displayedStocks: number;
+  signalSummary: {
+    buy: number;
+    sell: number;
+    hold: number;
+    strongBuy: number;
+    strongSell: number;
+  };
+  marketSummary: ReturnType<typeof getMarketSummary>;
+  sectorAnalysis: ReturnType<typeof getSectorAnalysis>;
+  volumeProfile: ReturnType<typeof getVolumeProfile>;
+  momentumAnalysis: ReturnType<typeof getMomentumAnalysis>;
+  riskAnalysis: ReturnType<typeof getRiskAnalysis>;
+  marketStatus: { isOpen: boolean; nextOpen?: string; nextClose?: string; message: string; currentTime: string };
+  stocks: EnhancedStockResult[];
+  cached: boolean;
+  performance?: {
+    processingTime: number;
+    stocksPerSecond: number;
+    memoryUsage: number;
+  };
+}
+
+function setCachedData(cacheKey: string, data: ResponseData): void {
+  memoryCache.set(cacheKey, {
+    data: {
+      source: "IDX Complete Data + Technical Analysis",
+      timestamp: data.timestamp,
+      data: data.stocks
+    },
+    timestamp: Date.now()
+  });
+  
+  cleanOldCache();
+}
+
+function cleanOldCache(): void {
+  const now = Date.now();
+  const maxAge = 10 * 60 * 1000; // Keep cache for 10 minutes max
+  
+  for (const [key, value] of memoryCache.entries()) {
+    if (now - value.timestamp > maxAge) {
+      memoryCache.delete(key);
+    }
+  }
+}
+
+// Expanded sector mapping untuk coverage lebih luas
 const sectorMapping: Record<string, string> = {
   // Banking & Financial
   'BBCA': 'Banking', 'BBRI': 'Banking', 'BMRI': 'Banking', 'BBNI': 'Banking',
@@ -970,14 +741,22 @@ const sectorMapping: Record<string, string> = {
   'EDGE': 'Technology', 'MTDL': 'Technology'
 };
 
+// Enhanced sector detection dengan pattern matching
 function getSector(symbol: string): string {
   const baseSymbol = symbol.replace('.JK', '');
-  if (sectorMapping[baseSymbol]) return sectorMapping[baseSymbol];
+  
+  // Direct mapping
+  if (sectorMapping[baseSymbol]) {
+    return sectorMapping[baseSymbol];
+  }
+  
+  // Pattern-based mapping
   if (baseSymbol.startsWith('B') && baseSymbol.length === 4) return 'Banking';
   if (baseSymbol.startsWith('S') && baseSymbol.length === 4) return 'Cement';
   if (baseSymbol.startsWith('T') && baseSymbol.length === 4) return 'Telecom';
   if (baseSymbol.includes('AUTO') || baseSymbol.includes('MOTOR')) return 'Automotive';
   if (baseSymbol.includes('MINING') || baseSymbol.includes('TAMBANG')) return 'Mining';
+  
   return 'Others';
 }
 
@@ -1126,4 +905,58 @@ function getRiskAnalysis(stocks: EnhancedStockResult[]) {
     bestRiskReward,
     marketRisk: avgVolatility > 0.04 ? 'HIGH' : avgVolatility > 0.02 ? 'MEDIUM' : 'LOW'
   };
+}
+
+
+
+function getMarketStatus(): { isOpen: boolean; nextOpen?: string; nextClose?: string; message: string; currentTime: string } {
+  try {
+    const now = new Date();
+    const jakartaOffset = 7 * 60 * 60 * 1000; // UTC+7 in milliseconds
+    const jakartaTime = new Date(now.getTime() + jakartaOffset);
+    
+    const hour = jakartaTime.getUTCHours();
+    const day = jakartaTime.getUTCDay();
+    
+    const isWeekday = day >= 1 && day <= 5;
+    const isTradingHours = hour >= 9 && hour < 16;
+    const isOpen = isWeekday && isTradingHours;
+    
+    let message = '';
+    const nextOpen = '';
+    let nextClose = '';
+    
+    if (isOpen) {
+      const closeTime = new Date(jakartaTime);
+      closeTime.setUTCHours(16, 0, 0, 0);
+      const timeToClose = closeTime.getTime() - jakartaTime.getTime();
+      const hoursToClose = Math.floor(timeToClose / (1000 * 60 * 60));
+      const minutesToClose = Math.floor((timeToClose % (1000 * 60 * 60)) / (1000 * 60));
+      
+      message = `Market open - Closes in ${hoursToClose}h ${minutesToClose}m`;
+      nextClose = closeTime.toISOString();
+    } else {
+      if (!isWeekday) {
+        message = `Market closed - Weekend`;
+      } else if (hour < 9) {
+        message = `Market closed - Opens at 09:00`;
+      } else {
+        message = `Market closed - Opens tomorrow at 09:00`;
+      }
+    }
+    
+    return { 
+      isOpen, 
+      nextOpen, 
+      nextClose,
+      message,
+      currentTime: jakartaTime.toISOString()
+    };
+  } catch {
+    return {
+      isOpen: false,
+      message: 'Market status unavailable',
+      currentTime: new Date().toISOString()
+    };
+  }
 }
