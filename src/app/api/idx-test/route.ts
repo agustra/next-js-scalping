@@ -19,9 +19,9 @@
 //   return Response.json(data);
 // }
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // const userAgent = request.headers.get("user-agent") || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36";
     
