@@ -3,7 +3,7 @@
   "version": "2.0.2",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -29,8 +29,11 @@
     "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.5",
+    "recharts": "^3.2.1",
     "swiper": "^11.2.0",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.0",
+    "technicalindicators": "^3.1.0",
+    "yahoo-finance2": "^2.13.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
