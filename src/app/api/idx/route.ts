@@ -107,43 +107,18 @@ export async function GET() {
     
     console.log('🔄 Fetching fresh data from IDX...');
     
-    // 1. Ambil data saham dari IDX dengan fallback
-    let idxData: { data: IDXStockData[] } | null = null;
-    
-    try {
-      const idxResponse = await fetch(
-        "https://www.idx.co.id/primary/TradingSummary/GetStockSummary",
-        {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Accept-Language": "id-ID,id;q=0.9,en;q=0.8",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Referer": "https://www.idx.co.id/",
-            "Origin": "https://www.idx.co.id",
-            "X-Requested-With": "XMLHttpRequest",
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache"
-          },
-          next: { revalidate: 60 }
-        }
-      );
+    // 1. Ambil data saham dari IDX melalui proxy internal
+    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+    const idxResponse = await fetch(`${baseUrl}/api/idx-proxy`);
 
-      if (idxResponse.ok) {
-        const data = await idxResponse.json();
-        if (data?.data && Array.isArray(data.data)) {
-          idxData = data;
-        }
-      }
-    } catch (error) {
-      console.warn('IDX API failed, using fallback data:', error);
+    if (!idxResponse.ok) {
+      throw new Error(`Failed to fetch IDX data: ${idxResponse.status}`);
     }
-    
-    // Fallback jika IDX API gagal
-    if (!idxData) {
-      console.log('🔄 Using fallback stock data...');
-      idxData = generateFallbackData();
+
+    const idxData = await idxResponse.json();
+
+    if (!idxData?.data || !Array.isArray(idxData.data)) {
+      throw new Error("Invalid IDX data structure");
     }
 
     // 2. Filter dan proses saham aktif
@@ -188,11 +163,8 @@ export async function GET() {
 
     // 7. Prepare enhanced response
     const marketStatus = getMarketStatus();
-    const isUsingFallback = !idxData || idxData.data.length <= 5;
     const responseData: ResponseData = {
-      source: isUsingFallback 
-        ? "Fallback Data + Technical Analysis (IDX API Unavailable)" 
-        : "IDX Complete Data + Advanced Technical Analysis + Sector Intelligence",
+      source: "IDX Complete Data + Advanced Technical Analysis + Sector Intelligence",
       timestamp: Date.now(),
       totalStocks: idxData.data.length,
       activeStocks: activeStocks.length,
@@ -938,76 +910,54 @@ function getRiskAnalysis(stocks: EnhancedStockResult[]) {
 
 
 
-// Fallback data generator untuk ketika IDX API tidak tersedia
-function generateFallbackData(): { data: IDXStockData[] } {
-  const fallbackStocks: IDXStockData[] = [
-    {
-      No: 1, IDStockSummary: 1, Date: new Date().toISOString(), StockCode: 'BBCA', StockName: 'Bank Central Asia Tbk',
-      Remarks: '', Previous: 10000, OpenPrice: 10050, FirstTrade: 10050, High: 10100, Low: 9950, Close: 10075,
-      Change: 75, Volume: 15000000, Value: 151125000000, Frequency: 5000, IndexIndividual: 1.2,
-      Offer: 10100, OfferVolume: 500000, Bid: 10050, BidVolume: 750000, ListedShares: 24000000000,
-      TradebleShares: 24000000000, WeightForIndex: 15.5, ForeignSell: 5000000, ForeignBuy: 7500000,
-      DelistingDate: '', NonRegularVolume: 0, NonRegularValue: 0, NonRegularFrequency: 0, persen: 0.75, percentage: 0.75
-    },
-    {
-      No: 2, IDStockSummary: 2, Date: new Date().toISOString(), StockCode: 'BBRI', StockName: 'Bank Rakyat Indonesia Tbk',
-      Remarks: '', Previous: 4500, OpenPrice: 4520, FirstTrade: 4520, High: 4580, Low: 4480, Close: 4550,
-      Change: 50, Volume: 25000000, Value: 113750000000, Frequency: 8000, IndexIndividual: 1.1,
-      Offer: 4560, OfferVolume: 800000, Bid: 4540, BidVolume: 1200000, ListedShares: 125000000000,
-      TradebleShares: 125000000000, WeightForIndex: 12.8, ForeignSell: 8000000, ForeignBuy: 6500000,
-      DelistingDate: '', NonRegularVolume: 0, NonRegularValue: 0, NonRegularFrequency: 0, persen: 1.11, percentage: 1.11
-    },
-    {
-      No: 3, IDStockSummary: 3, Date: new Date().toISOString(), StockCode: 'TLKM', StockName: 'Telkom Indonesia Tbk',
-      Remarks: '', Previous: 3200, OpenPrice: 3180, FirstTrade: 3180, High: 3220, Low: 3160, Close: 3190,
-      Change: -10, Volume: 18000000, Value: 57420000000, Frequency: 6500, IndexIndividual: -0.3,
-      Offer: 3200, OfferVolume: 600000, Bid: 3180, BidVolume: 900000, ListedShares: 99000000000,
-      TradebleShares: 99000000000, WeightForIndex: 8.2, ForeignSell: 4000000, ForeignBuy: 3200000,
-      DelistingDate: '', NonRegularVolume: 0, NonRegularValue: 0, NonRegularFrequency: 0, persen: -0.31, percentage: -0.31
-    }
-  ];
-  
-  return { data: fallbackStocks };
-}
-
 function getMarketStatus(): { isOpen: boolean; nextOpen?: string; nextClose?: string; message: string; currentTime: string } {
-  const now = new Date();
-  const jakartaTime = new Date(now.toLocaleString("id-ID", {timeZone: "Asia/Jakarta"}));
-  const hour = jakartaTime.getHours();
-  const day = jakartaTime.getDay();
-  
-  const isWeekday = day >= 1 && day <= 5;
-  const isTradingHours = hour >= 9 && hour < 16;
-  const isOpen = isWeekday && isTradingHours;
-  
-  let message = '';
-  const nextOpen = '';
-  let nextClose = '';
-  
-  if (isOpen) {
-    const closeTime = new Date(jakartaTime);
-    closeTime.setHours(16, 0, 0, 0);
-    const timeToClose = closeTime.getTime() - jakartaTime.getTime();
-    const hoursToClose = Math.floor(timeToClose / (1000 * 60 * 60));
-    const minutesToClose = Math.floor((timeToClose % (1000 * 60 * 60)) / (1000 * 60));
+  try {
+    const now = new Date();
+    const jakartaOffset = 7 * 60 * 60 * 1000; // UTC+7 in milliseconds
+    const jakartaTime = new Date(now.getTime() + jakartaOffset);
     
-    message = `Market open - Closes in ${hoursToClose}h ${minutesToClose}m`;
-    nextClose = closeTime.toISOString();
-  } else {
-    if (!isWeekday) {
-      message = `Market closed - Weekend`;
-    } else if (hour < 9) {
-      message = `Market closed - Opens at 09:00`;
+    const hour = jakartaTime.getUTCHours();
+    const day = jakartaTime.getUTCDay();
+    
+    const isWeekday = day >= 1 && day <= 5;
+    const isTradingHours = hour >= 9 && hour < 16;
+    const isOpen = isWeekday && isTradingHours;
+    
+    let message = '';
+    const nextOpen = '';
+    let nextClose = '';
+    
+    if (isOpen) {
+      const closeTime = new Date(jakartaTime);
+      closeTime.setUTCHours(16, 0, 0, 0);
+      const timeToClose = closeTime.getTime() - jakartaTime.getTime();
+      const hoursToClose = Math.floor(timeToClose / (1000 * 60 * 60));
+      const minutesToClose = Math.floor((timeToClose % (1000 * 60 * 60)) / (1000 * 60));
+      
+      message = `Market open - Closes in ${hoursToClose}h ${minutesToClose}m`;
+      nextClose = closeTime.toISOString();
     } else {
-      message = `Market closed - Opens tomorrow at 09:00`;
+      if (!isWeekday) {
+        message = `Market closed - Weekend`;
+      } else if (hour < 9) {
+        message = `Market closed - Opens at 09:00`;
+      } else {
+        message = `Market closed - Opens tomorrow at 09:00`;
+      }
     }
+    
+    return { 
+      isOpen, 
+      nextOpen, 
+      nextClose,
+      message,
+      currentTime: jakartaTime.toISOString()
+    };
+  } catch {
+    return {
+      isOpen: false,
+      message: 'Market status unavailable',
+      currentTime: new Date().toISOString()
+    };
   }
-  
-  return { 
-    isOpen, 
-    nextOpen, 
-    nextClose,
-    message,
-    currentTime: jakartaTime.toISOString()
-  };
 }
