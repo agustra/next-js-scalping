@@ -46,24 +46,25 @@ export async function saveBandarData(data: BandarData[]) {
     
     for (const stock of data) {
       // Save stock data
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       await db.execute(
-        `INSERT INTO stocks (symbol, name, price, change_amount, change_percent, volume) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [stock.symbol, stock.name, stock.price, stock.change, stock.changePercent, stock.volume]
+        `INSERT INTO stocks (symbol, name, price, change_amount, change_percent, volume, timestamp, created_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [stock.symbol, stock.name, stock.price, stock.change, stock.changePercent, stock.volume, now, now]
       );
 
       // Save bandar signals
       await db.execute(
-        `INSERT INTO bandar_signals (symbol, signal, signal_strength, bandar_signal, bandar_confidence, bandar_pattern) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [stock.symbol, stock.signal, stock.signalStrength, stock.bandarSignal, stock.bandarConfidence, stock.bandarPattern]
+        `INSERT INTO bandar_signals (symbol, signals, signal_strength, bandar_signal, bandar_confidence, bandar_pattern, timestamp) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [stock.symbol, stock.signal, stock.signalStrength, stock.bandarSignal, stock.bandarConfidence, stock.bandarPattern, now]
       );
 
       // Save technical indicators
       await db.execute(
-        `INSERT INTO technical_indicators (symbol, rsi, sma10, ema5, vwap) 
-         VALUES (?, ?, ?, ?, ?)`,
-        [stock.symbol, stock.indicators.rsi, stock.indicators.sma10, stock.indicators.ema5, stock.indicators.vwap]
+        `INSERT INTO technical_indicators (symbol, rsi, sma10, ema5, vwap, timestamp) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [stock.symbol, stock.indicators.rsi, stock.indicators.sma10, stock.indicators.ema5, stock.indicators.vwap, now]
       );
     }
 
