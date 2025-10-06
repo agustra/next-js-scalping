@@ -23,6 +23,7 @@
     "apexcharts": "^4.3.0",
     "autoprefixer": "^10.4.20",
     "flatpickr": "^4.6.13",
+    "mysql2": "^3.15.1",
     "next": "15.2.3",
     "puppeteer": "^24.23.0",
     "react": "^19.0.0",

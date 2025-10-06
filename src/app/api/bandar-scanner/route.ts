@@ -477,6 +477,7 @@
 
 import { NextResponse } from "next/server";
 import { RSI, SMA, EMA } from 'technicalindicators';
+import { saveBandarData } from '@/lib/bandar-service';
 
 // ============================
 // ====== INTERFACES ==========
@@ -855,6 +856,12 @@ export async function GET() {
     };
 
     cache = { data: payload, timestamp: Date.now() };
+
+    // Save to database (async, non-blocking)
+    saveBandarData(sorted).catch(error => {
+      console.error('Failed to save bandar data to database:', error);
+    });
+
     return NextResponse.json(payload);
   } catch (err) {
     console.error("Bandar analyzer error:", err);
