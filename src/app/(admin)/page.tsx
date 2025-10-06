@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { useSidebar } from "@/context/SidebarContext";
 import {
   LineChart,
   Line,
@@ -55,18 +56,52 @@ function isMarketOpen() {
 }
 
 export default function BandarDashboard() {
+  const { toggleSidebar, toggleMobileSidebar, isExpanded, isMobileOpen } = useSidebar();
   const [endpoint, setEndpoint] = useState<string>("/api/bandar-scanner");
   const [pollMs, setPollMs] = useState<number>(10000);
   const [data, setData] = useState<BandarResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filterSignal, setFilterSignal] = useState<string>("ALL");
+  const [filterSignal, setFilterSignal] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('bandar-filter-signal') || 'ALL';
+    }
+    return 'ALL';
+  });
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(20);
-  const [autoRefresh, setAutoRefresh] = useState(isMarketOpen());
-  const [showChartInfo, setShowChartInfo] = useState(false);
+  const [itemsPerPage, setItemsPerPage] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return Number(localStorage.getItem('bandar-items-per-page')) || 20;
+    }
+    return 20;
+  });
+  const [autoRefresh, setAutoRefresh] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('bandar-auto-refresh');
+      return saved ? JSON.parse(saved) : isMarketOpen();
+    }
+    return isMarketOpen();
+  });
+  const [showChartInfo, setShowChartInfo] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return JSON.parse(localStorage.getItem('bandar-show-chart-info') || 'false');
+    }
+    return false;
+  });
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Auto-close sidebar on page load
+  useEffect(() => {
+    if (isExpanded || isMobileOpen) {
+      if (window.innerWidth >= 1024 && isExpanded) {
+        toggleSidebar();
+      } else if (window.innerWidth < 1024 && isMobileOpen) {
+        toggleMobileSidebar();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array = run only on mount
 
   useEffect(() => {
     let mounted = true;
@@ -110,13 +145,30 @@ export default function BandarDashboard() {
       d.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSignal && matchesSearch;
   });
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const totalPages = itemsPerPage >= filtered.length ? 1 : Math.ceil(filtered.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = filtered.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedData = itemsPerPage >= filtered.length ? filtered : filtered.slice(startIndex, startIndex + itemsPerPage);
+
+  // Save preferences to localStorage
+  useEffect(() => {
+    localStorage.setItem('bandar-filter-signal', filterSignal);
+  }, [filterSignal]);
+
+  useEffect(() => {
+    localStorage.setItem('bandar-items-per-page', itemsPerPage.toString());
+  }, [itemsPerPage]);
+
+  useEffect(() => {
+    localStorage.setItem('bandar-auto-refresh', JSON.stringify(autoRefresh));
+  }, [autoRefresh]);
+
+  useEffect(() => {
+    localStorage.setItem('bandar-show-chart-info', JSON.stringify(showChartInfo));
+  }, [showChartInfo]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterSignal, searchQuery]);
+  }, [filterSignal, searchQuery, itemsPerPage]);
 
   const topByConfidence = [...filtered]
     .sort((a, b) => b.bandarConfidence - a.bandarConfidence)
@@ -268,9 +320,13 @@ export default function BandarDashboard() {
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="volume" barSize={20} />
+                  <YAxis tickFormatter={(value) => value.toLocaleString()} />
+                  <Tooltip 
+                    formatter={(value: number) => [value.toLocaleString(), 'Volume']}
+                    labelStyle={{ color: '#374151' }}
+                    contentStyle={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}
+                  />
+                  <Bar dataKey="volume" barSize={20} fill="#3b82f6" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -280,8 +336,28 @@ export default function BandarDashboard() {
         <section className="bg-white rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-medium">Scanner Results</h3>
-            <div className="text-sm text-slate-500">
-              Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filtered.length)} of {filtered.length} results
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-600">Show:</span>
+                <select 
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={filtered.length || 999999}>All</option>
+                </select>
+                <span className="text-xs text-slate-600">per page</span>
+              </div>
+              <div className="text-sm text-slate-500">
+                {itemsPerPage >= filtered.length 
+                  ? `Showing all ${filtered.length} results`
+                  : `Showing ${startIndex + 1}-${Math.min(startIndex + itemsPerPage, filtered.length)} of ${filtered.length} results`
+                }
+              </div>
             </div>
           </div>
           
@@ -308,7 +384,7 @@ export default function BandarDashboard() {
                     <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </button>
-              )}
+              )} 
             </div>
           </div>
           {loading && <div className="text-sm text-slate-500 mb-2">Loading...</div>}

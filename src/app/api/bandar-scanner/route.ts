@@ -573,46 +573,60 @@ function detectBandarPattern(stock: IDXStockData) {
   const offerVolume = stock.OfferVolume || 0;
 
   let score = 0;
-  let pattern = "";
+  const pattern = [];
 
   // Pattern 1: Volume spike + harga stabil (akumulasi)
-  if (volume > 2000000 && priceChangePercent < 0.02) {
+  if (volume > 2_000_000 && priceChangePercent < 0.02) {
     score += 3;
-    pattern += "Volume tinggi, harga stabil ";
+    pattern.push("Volume tinggi, harga stabil");
   }
 
   // Pattern 2: Spread ketat + volume tinggi
-  if (spreadPercent < 0.02 && volume > 1500000) {
+  if (spreadPercent < 0.02 && volume > 1_500_000) {
     score += 2;
-    pattern += "Spread ketat ";
+    pattern.push("Spread ketat");
   }
 
   // Pattern 3: Foreign buying mendukung
-  if (foreignNet > 500000) {
+  if (foreignNet > 500_000) {
     score += 1;
-    pattern += "Foreign net buy ";
+    pattern.push("Foreign net buy");
   }
 
   // Pattern 4: Volume tinggi + harga turun (distribusi)
-  if (volume > 2000000 && stock.Change < -0.01) {
+  if (volume > 2_000_000 && stock.Change < -0.01) {
     score -= 3;
-    pattern = "Volume tinggi, harga turun (distribusi)";
+    pattern.push("Volume tinggi, harga turun (distribusi)");
   }
 
-  // Pattern 5: Ask volume jauh lebih besar
+  // Pattern 5: Ask volume jauh lebih besar (tekanan jual)
   if (offerVolume > bidVolume * 2) {
     score -= 2;
-    pattern += "Ask volume dominan ";
+    pattern.push("Ask volume dominan");
   }
 
-  const signal =
-    score >= 3 ? "ACCUMULATION" :
-    score <= -3 ? "DISTRIBUTION" : "NEUTRAL";
+  // Pattern 6: Harga naik kuat tapi belum ada akumulasi (momentum buy)
+  if (stock.Change > 0.03 && volume > 1_000_000 && score === 0) {
+    score += 1.5;
+    pattern.push("Momentum naik kuat, potensi early accumulation");
+  }
 
-  const confidence = Math.min(Math.abs(score), 5);
+  // Tentukan signal akhir
+  let signal: string;
+  if (score >= 3) signal = "ACCUMULATION";
+  else if (score <= -3) signal = "DISTRIBUTION";
+  else if (score > 0.5 && score < 3) signal = "MOMENTUM";
+  else signal = "NEUTRAL";
 
-  return { signal, confidence, pattern };
+  // Confidence level
+  const confidence = Math.min(Math.round(Math.abs(score)), 5);
+
+  // Gabungkan deskripsi pola
+  const patternSummary = pattern.join(", ") || "Belum ada pola bandar jelas.";
+
+  return { signal, confidence, pattern: patternSummary };
 }
+
 
 // ============================
 // ====== HISTORICAL SIM ======
