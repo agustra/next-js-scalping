@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import connection from '@/lib/db';
+import { ResultSetHeader } from 'mysql2';
 
 export async function POST() {
   try {
@@ -16,12 +17,12 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       deleted: {
-        stocks: (stocksResult as any).affectedRows,
-        signals: (signalsResult as any).affectedRows,
-        indicators: (indicatorsResult as any).affectedRows
+        stocks: (stocksResult as ResultSetHeader).affectedRows,
+        signals: (signalsResult as ResultSetHeader).affectedRows,
+        indicators: (indicatorsResult as ResultSetHeader).affectedRows
       }
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Cleanup failed' }, { status: 500 });
   }
 }

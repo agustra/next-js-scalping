@@ -55,7 +55,7 @@ export async function saveBandarData(data: BandarData[]) {
         [stock.symbol, today]
       );
       
-      if ((existing as any[]).length > 0) {
+      if ((existing as unknown[]).length > 0) {
         // UPDATE existing record
         await db.execute(
           `UPDATE stocks SET price = ?, change_amount = ?, change_percent = ?, volume = ?, timestamp = ? 
