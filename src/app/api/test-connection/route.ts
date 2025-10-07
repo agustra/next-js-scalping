@@ -7,6 +7,17 @@ interface CountResult extends RowDataPacket {
 }
 
 export async function GET() {
+  // Debug environment variables
+  const envDebug = {
+    MYSQL_URL: process.env.MYSQL_URL ? 'SET' : 'NOT_SET',
+    MYSQLHOST: process.env.MYSQLHOST || 'NOT_SET',
+    MYSQLPORT: process.env.MYSQLPORT || 'NOT_SET',
+    MYSQLUSER: process.env.MYSQLUSER || 'NOT_SET',
+    MYSQLDATABASE: process.env.MYSQLDATABASE || 'NOT_SET',
+    MYSQLPASSWORD: process.env.MYSQLPASSWORD ? 'SET' : 'NOT_SET',
+    DB_PASSWORD: process.env.DB_PASSWORD ? 'SET' : 'NOT_SET'
+  };
+
   try {
     const db = await connection;
     
@@ -29,6 +40,7 @@ export async function GET() {
         stocks: (stockCount as CountResult[])[0]?.count || 0,
         signals: (signalCount as CountResult[])[0]?.count || 0
       },
+      env: envDebug,
       timestamp: new Date().toISOString(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
     });
@@ -36,6 +48,7 @@ export async function GET() {
     return NextResponse.json({
       status: 'error',
       message: error instanceof Error ? error.message : 'Unknown error',
+      env: envDebug,
       timestamp: new Date().toISOString()
     }, { status: 500 });
   }
