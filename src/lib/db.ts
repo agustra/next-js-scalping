@@ -1,12 +1,12 @@
 import mysql from 'mysql2/promise';
 
-// Railway connection with proper fallbacks
+// Railway MySQL connection
 const connection = mysql.createConnection({
-  host: process.env.MYSQLHOST || 'hopper.proxy.rlwy.net',
-  port: process.env.MYSQLPORT === '3306' ? 24330 : parseInt(process.env.MYSQLPORT || '24330'),
-  user: process.env.MYSQLUSER || 'root',
-  password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || 'UrTicPtFLCevaIFRDPpUQSWYmcbsFzsb',
-  database: process.env.MYSQLDATABASE === '${{MYSQL_DATABASE}}' ? 'railway' : (process.env.MYSQLDATABASE || 'railway')
+  host: process.env.DB_HOST || 'hopper.proxy.rlwy.net',
+  port: parseInt(process.env.DB_PORT || '24330'),
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME || 'railway'
 });
 
 export default connection;
