@@ -18,6 +18,14 @@ export async function GET() {
     DB_PASSWORD: process.env.DB_PASSWORD ? 'SET' : 'NOT_SET'
   };
 
+  // Debug actual connection config
+  const connectionConfig = {
+    host: process.env.MYSQLHOST || 'hopper.proxy.rlwy.net',
+    port: parseInt(process.env.MYSQLPORT || '24330'),
+    user: process.env.MYSQLUSER || 'root',
+    database: process.env.MYSQLDATABASE === '${{MYSQL_DATABASE}}' ? 'railway' : (process.env.MYSQLDATABASE || 'railway')
+  };
+
   try {
     const db = await connection;
     
@@ -49,6 +57,7 @@ export async function GET() {
       status: 'error',
       message: error instanceof Error ? error.message : 'Unknown error',
       env: envDebug,
+      connectionConfig,
       timestamp: new Date().toISOString()
     }, { status: 500 });
   }
